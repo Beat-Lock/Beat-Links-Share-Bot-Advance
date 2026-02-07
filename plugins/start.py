@@ -76,6 +76,16 @@ async def start_command(client: Bot, message: Message):
     # Add user to database
     await add_user(user_id)
 
+    # ✅ Check if user is permanently banned
+    if await is_user_banned(user_id):
+        return await message.reply_text(
+            "<b><blockquote expandable>⛔️ Yᴏᴜ ᴀʀᴇ Bᴀɴɴᴇᴅ ғʀᴏᴍ ᴜsɪɴɢ ᴛʜɪs ʙᴏᴛ.</b>\n\n"
+            "<i>Cᴏɴᴛᴀᴄᴛ sᴜᴘᴘᴏʀᴛ ɪғ ʏᴏᴜ ᴛʜɪɴᴋ ᴛʜɪs ɪs ᴀ ᴍɪsᴛᴀᴋᴇ.</i></blockquote>",
+            reply_markup=InlineKeyboardMarkup(
+                [[InlineKeyboardButton("Cᴏɴᴛᴀᴄᴛ Sᴜᴘᴘᴏʀᴛ", url=BAN_SUPPORT)]]
+            )
+        )
+
     # ✅ Check Force Subscription
     if not await is_subscribed(client, user_id):
         return await not_joined(client, message)
