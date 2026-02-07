@@ -23,14 +23,14 @@ from pyrogram.errors.exceptions.bad_request_400 import UserNotParticipant
 from pyrogram.errors import FloodWait, UserIsBlocked, InputUserDeactivated, UserNotParticipant
 from bot import Bot
 from config import *
-from helper_func import *
-from database.database import db  # ✅ Import db instance instead
+from helper_func import admin  # ✅ Import admin filter from helper_func
+from database.database import db  # ✅ Import db instance
 
 #BAN-USER-SYSTEM
 @Bot.on_message(filters.private & filters.command('ban') & admin)
 async def add_banuser(client: Client, message: Message):        
     pro = await message.reply("⏳ <i>Pʀᴏᴄᴇssɪɴɢ ʀᴇǫᴜᴇsᴛ...</i>", quote=True)
-    banuser_ids = await db.get_ban_users()  # ✅ Use db.method
+    banuser_ids = await db.get_ban_users()
     banusers = message.text.split()[1:]
 
     reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("❌ Cʟᴏsᴇ", callback_data="close")]])
@@ -51,7 +51,7 @@ async def add_banuser(client: Client, message: Message):
             report += f"⚠️ Iɴᴠᴀʟɪᴅ ID: <code>{uid}</code>\n"
             continue
 
-        if uid_int in await db.get_all_admins() or uid_int == OWNER_ID:  # ✅ Use db.method
+        if uid_int in await db.get_all_admins() or uid_int == OWNER_ID:
             report += f"⛔ Sᴋɪᴘᴘᴇᴅ ᴀᴅᴍɪɴ/ᴏᴡɴᴇʀ ID: <code>{uid_int}</code>\n"
             continue
 
@@ -60,7 +60,7 @@ async def add_banuser(client: Client, message: Message):
             continue
 
         if len(str(uid_int)) == 10:
-            await db.add_ban_user(uid_int)  # ✅ Use db.method
+            await db.add_ban_user(uid_int)
             report += f"✅ Bᴀɴɴᴇᴅ: <code>{uid_int}</code>\n"
             success_count += 1
         else:
@@ -74,7 +74,7 @@ async def add_banuser(client: Client, message: Message):
 @Bot.on_message(filters.private & filters.command('unban') & admin)
 async def delete_banuser(client: Client, message: Message):        
     pro = await message.reply("⏳ <i>Pʀᴏᴄᴇssɪɴɢ ʀᴇǫᴜᴇsᴛ...</i>", quote=True)
-    banuser_ids = await db.get_ban_users()  # ✅ Use db.method
+    banuser_ids = await db.get_ban_users()
     banusers = message.text.split()[1:]
 
     reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("❌ Cʟᴏsᴇ", callback_data="close")]])
@@ -92,7 +92,7 @@ async def delete_banuser(client: Client, message: Message):
         if not banuser_ids:
             return await pro.edit("<b>✅ NO ᴜsᴇʀs ɪɴ ᴛʜᴇ ʙᴀɴ ʟɪsᴛ.</b>", reply_markup=reply_markup)
         for uid in banuser_ids:
-            await db.del_ban_user(uid)  # ✅ Use db.method
+            await db.del_ban_user(uid)
         listed = "\n".join([f"✅ Uɴʙᴀɴɴᴇᴅ: <code>{uid}</code>" for uid in banuser_ids])
         return await pro.edit(f"<b>🚫 Cʟᴇᴀʀᴇᴅ Bᴀɴ Lɪsᴛ:</b>\n\n{listed}", reply_markup=reply_markup)
 
@@ -105,7 +105,7 @@ async def delete_banuser(client: Client, message: Message):
             continue
 
         if uid_int in banuser_ids:
-            await db.del_ban_user(uid_int)  # ✅ Use db.method
+            await db.del_ban_user(uid_int)
             report += f"✅ Uɴʙᴀɴɴᴇᴅ: <code>{uid_int}</code>\n"
         else:
             report += f"⚠️ Nᴏᴛ ɪɴ ʙᴀɴ ʟɪsᴛ: <code>{uid_int}</code>\n"
@@ -115,7 +115,7 @@ async def delete_banuser(client: Client, message: Message):
 @Bot.on_message(filters.private & filters.command('banlist') & admin)
 async def get_banuser_list(client: Client, message: Message):        
     pro = await message.reply("⏳ <i>Fᴇᴛᴄʜɪɴɢ Bᴀɴ Lɪsᴛ...</i>", quote=True)
-    banuser_ids = await db.get_ban_users()  # ✅ Use db.method
+    banuser_ids = await db.get_ban_users()
 
     if not banuser_ids:
         return await pro.edit("<b>✅ NO ᴜsᴇʀs ɪɴ ᴛʜᴇ ʙᴀɴ Lɪsᴛ.</b>", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("❌ Cʟᴏsᴇ", callback_data="close")]]))
