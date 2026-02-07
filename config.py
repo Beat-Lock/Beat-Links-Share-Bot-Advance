@@ -30,10 +30,30 @@ TG_BOT_WORKERS = int(os.environ.get("TG_BOT_WORKERS", "40"))
 START_PIC = "https://telegra.ph/file/f3d3aff9ec422158feb05-d2180e3665e0ac4d32.jpg"
 START_IMG = "https://telegra.ph/file/f3d3aff9ec422158feb05-d2180e3665e0ac4d32.jpg"
 # Messages
-START_MSG = os.environ.get("START_MESSAGE", "<b>ᴡᴇʟᴄᴏᴍᴇ ᴛᴏ ᴛʜᴇ ᴀᴅᴠᴀɴᴄᴇᴅ ʟɪɴᴋs sʜᴀʀɪɴɢ ʙᴏᴛ. ᴡɪᴛʜ ᴛʜɪs ʙᴏᴛ, ʏᴏᴜ ᴄᴀɴ sʜᴀʀᴇ ʟɪɴᴋs ᴀɴᴅ ᴋᴇᴇᴘ ʏᴏᴜʀ ᴄʜᴀɴɴᴇʟs sᴀғᴇ ғʀᴏᴍ ᴄᴏᴘʏʀɪɢʜᴛ ɪssᴜᴇs.\n\n<blockquote>‣ ᴍᴀɪɴᴛᴀɪɴᴇᴅ ʙʏ : <a href='https://t.me/codeflix_bots'>ʏᴀᴛᴏ</a></blockquote></b>")
-HELP = os.environ.get("HELP_MESSAGE", "<b><blockquote expandable>» Creator: <a href=https://t.me/proyato>Yato</a>\n» Our Community: <a href=https://t.me/otakuflix_network>Flix Network</a>\n» Anime Channel: <a href=https://t.me/animes_cruise>Anime Cruise</a>\n» Ongoing Anime: <a href=https://t.me/Ongoing_cruise>Ongoing cruise</a>\n» Developer: <a href=https://t.me/onlyyuji>Yuji</a></b>")
-ABOUT = os.environ.get("ABOUT_MESSAGE", "<b><blockquote expandable>This bot is developed by Yato (@ProYato) to securely share Telegram channel links with temporary invite links, protecting your channels from copyright issues.</b>")
+START_MSG = os.environ.get("START_MESSAGE", "<b><blockquote>ᴡᴇʟᴄᴏᴍᴇ ᴛᴏ ᴛʜᴇ ᴀᴅᴠᴀɴᴄᴇᴅ ʟɪɴᴋs sʜᴀʀɪɴɢ ʙoᴛ. ᴡɪᴛʜ ᴛʜɪs ʙᴏᴛ, ʏᴏᴜ ᴄᴀɴ sʜᴀʀᴇ ʟɪɴᴋs ᴀɴᴅ ᴋᴇᴇᴘ ʏᴏᴜʀ ᴄʜᴀɴɴᴇʟs sᴀғᴇ ғʀᴏᴍ ᴄᴏᴘʏʀɪɢʜᴛ ɪssᴜᴇs.\nᴇxᴘʟᴏʀᴇ ᴛʜᴇ ᴏᴘᴛɪᴏɴs ʙᴇʟᴏᴡ ᴛᴏ ɢᴇᴛ sᴛᴀʀᴛᴇᴅ!</blockquote></b>")
+HELP = os.environ.get("HELP_MESSAGE", "<b><blockquote expandable>» Creator: <a href=https://t.me/Beat_Anime_Ocean> ʙᴇᴀᴛ </a>\n» ᴀɴɪᴍᴇ ᴅɪsᴄᴜssɪᴏɴ : <a href=https://t.me/Beat_Anime_Discussion> ᴀɴɪᴍᴇ ᴄʜᴀᴛ </a>\n» ᴀɴɪᴍᴇ ᴄʜᴀɴɴᴇʟ: <a href=https://t.me/Beat_Hindi_Dubbed> ʙᴇᴀᴛ ᴀɴɪᴍᴇ ᴡᴏʀʟᴅ </a>\n» ᴏɴɢᴏɪɴɢ ᴀɴɪᴍᴇ: <a href=https://t.me/BeatAnime> ʙᴇᴀᴛ ᴀɴɪᴍᴇ ɴᴇᴛᴡᴏʀᴋ </a>\n» ᴅᴇᴠᴇʟᴏᴘᴇʀ: <a href=https://t.me/beat_anime_ocean> ʙᴇᴀᴛ </a></b>")
+ABOUT = os.environ.get("ABOUT_MESSAGE", "<b><blockquote expandable>This bot is developed by Beat (@BeatAnim) to securely share Telegram channel links with temporary invite links, protecting your channels from copyright issues.</b>")
 
+ABOUT_TXT = """<b>›› ᴀɴɪᴍᴇ ᴅɪsᴄᴜssɪᴏɴ : <a href=https://t.me/Beat_Anime_Discussion>ᴀɴɪᴍᴇ ᴄʜᴀᴛ</a>
+<blockquote expandable>›› ᴜᴘᴅᴀᴛᴇs ᴄʜᴀɴɴᴇʟ: <a href='https://t.me/BeatAnime'>Cʟɪᴄᴋ ʜᴇʀᴇ</a>
+›› ᴏᴡɴᴇʀ: <a href=https://t.me/beat_anime_ocean>ʙᴇᴀᴛ</a>
+›› ʟᴀɴɢᴜᴀɢᴇ: <a href='https://docs.python.org/3/'>Pʏᴛʜᴏɴ 3</a>
+›› ʟɪʙʀᴀʀʏ: <a href='https://docs.pyrogram.org/'>Pʏʀᴏɢʀᴀᴍ ᴠ2</a>
+›› ᴅᴀᴛᴀʙᴀsᴇ: <a href='https://www.mongodb.com/docs/'>Mᴏɴɢᴏ ᴅʙ</a>  ᴀɴᴅ  <a href='https://neon.com/docs/'>ɴᴇᴏɴ ᴅʙ</a>
+›› ᴅᴇᴠᴇʟᴏᴘᴇʀ: @Beat_Anime_Ocen</b></blockquote>""" 
+
+CHANNELS_TXT = """<b>›› ᴀɴɪᴍᴇ ᴄʜᴀɴɴᴇʟ: <a href=https://t.me/Beat_Hindi_Dubbed> ʙᴇᴀᴛ ᴀɴɪᴍᴇ ᴡᴏʀʟᴅ</a>
+<blockquote expandable>›› ʙᴀᴄᴋᴜᴘ ᴄʜᴀɴɴᴇʟ: <a href='https://t.me/mebeet1'>ʙᴀᴄᴋᴜᴘ </a>
+›› ᴡᴇʙsᴇʀɪᴇs: ᴄᴏᴍɪɴɢ sᴏᴏɴ
+›› ᴀᴅᴜʟᴛ ᴄʜᴀɴɴᴇʟs: ᴄᴏᴍɪɴɢ sᴏᴏɴ
+›› ᴍᴀɴʜᴡᴀ ᴄʜᴀɴɴᴇʟ: ᴄᴏᴍɪɴɢ sᴏᴏɴ
+›› ᴄᴏᴍᴍᴜɴɪᴛʏ: <a href=https://t.me/Beat_Anime_Discussion> ᴀɴɪᴍᴇ ᴄʜᴀᴛ</a>
+›› ᴅᴇᴠᴇʟᴏᴘᴇʀ: @Beat_Anime_Ocen</b></blockquote>""" 
+
+#--- ---- ---- --- --- --- - -- -  - - - - - - - - - - - --  - -
+# Default
+BOT_STATS_TEXT = "<b>BOT UPTIME</b>\n{uptime}"
+USER_REPLY_TEXT = "⚠️ ʙᴀᴋᴀ!!, ʏᴏᴜ ᴀʀᴇ ɴᴏᴛ ᴍʏ ᴍᴀsᴛᴇʀ. ɢᴏ ᴀᴡᴀʏ !😅"
 
 
 # Force sub link expiry (in seconds)
@@ -45,26 +65,6 @@ FORCE_MSG = os.environ.get("FORCE_MSG", "<b>ʜᴇʟʟᴏ {first},\n\nʏᴏᴜ ɴ
 
 BAN_SUPPORT = os.environ.get("BAN_SUPPORT", "https://t.me/BeatAnime")
 
-ABOUT_TXT = """<b>›› ᴄᴏᴍᴍᴜɴɪᴛʏ: <a href='https://t.me/otakuflix_network'>ᴏᴛᴀᴋᴜғʟɪx</a>
-<blockquote expandable>›› ᴜᴘᴅᴀᴛᴇs ᴄʜᴀɴɴᴇʟ: <a href='https://t.me/codeflix_bots'>Cʟɪᴄᴋ ʜᴇʀᴇ</a>
-›› ᴏᴡɴᴇʀ: <a href='https://t.me/cosmic_freak'>ʏᴀᴛᴏ</a>
-›› ʟᴀɴɢᴜᴀɢᴇ: <a href='https://docs.python.org/3/'>Pʏᴛʜᴏɴ 3</a>
-›› ʟɪʙʀᴀʀʏ: <a href='https://docs.pyrogram.org/'>Pʏʀᴏɢʀᴀᴍ ᴠ2</a>
-›› ᴅᴀᴛᴀʙᴀsᴇ: <a href='https://www.mongodb.com/docs/'>Mᴏɴɢᴏ ᴅʙ</a>
-›› ᴅᴇᴠᴇʟᴏᴘᴇʀ: @ProYato</b></blockquote>""" # Bhosdiwalo agar developer me Yato ka username hataya to agli baar se koi repo public nhi krunga!!
-
-CHANNELS_TXT = """<b>›› ᴀɴɪᴍᴇ ᴄʜᴀɴɴᴇʟ: <a href='https://t.me/animes_cruise'>ᴀɴɪᴍᴇ ᴄʀᴜɪsᴇ</a>
-<blockquote expandable>›› ᴍᴏᴠɪᴇs: <a href='https://t.me/movieflixspot'>ᴍᴏᴠɪᴇғʟɪx sᴘᴏᴛ</a>
-›› ᴡᴇʙsᴇʀɪᴇs: <a href='https://t.me/webseries_flix'>ᴡᴇʙsᴇʀɪᴇs ғʟɪx</a>
-›› ᴀᴅᴜʟᴛ ᴄʜᴀɴɴᴇʟs: <a href='https://t.me/hanime_arena'>ᴄᴏʀɴʜᴜʙ</a>
-›› ᴍᴀɴʜᴡᴀ ᴄʜᴀɴɴᴇʟ: <a href='https://t.me/pornhwa_flix'>ᴘᴏʀɴʜᴡᴀ</a>
-›› ᴄᴏᴍᴍᴜɴɪᴛʏ: <a href='https://t.me/otakuflix_network'>ᴏᴛᴀᴋᴜғʟɪx</a>
-›› ᴅᴇᴠᴇʟᴏᴘᴇʀ: @ProYato</b></blockquote>""" # Bhosdiwalo agar developer me Yato ka username hataya to agli baar se koi repo public nhi krunga!!
-
-#--- ---- ---- --- --- --- - -- -  - - - - - - - - - - - --  - -
-# Default
-BOT_STATS_TEXT = "<b>BOT UPTIME</b>\n{uptime}"
-USER_REPLY_TEXT = "⚠️ ғᴜᴄᴋ ʏᴏᴜ, ʏᴏᴜ ᴀʀᴇ ɴᴏᴛ ᴍʏ ᴍᴀsᴛᴇʀ. ɢᴏ ᴀᴡᴀʏ, ʙɪᴛᴄʜ 🙃!"
 
 # Logging
 LOG_FILE_NAME = "links-sharingbot.txt"
