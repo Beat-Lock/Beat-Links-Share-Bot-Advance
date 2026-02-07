@@ -20,6 +20,17 @@ from config import *
 from database.database import *
 from plugins.newpost import revoke_invite_after_5_minutes
 from helper_func import *
+from database.database import (
+    add_user,
+    get_fsub_channels,
+    get_channel_by_encoded_link,
+    get_channel_by_encoded_link2,
+    get_current_invite_link,
+    save_invite_link,
+    get_original_link,
+    is_user_banned,  # ← ADD THIS
+)
+
 
 # ==================== GLOBAL VARIABLES ====================
 
