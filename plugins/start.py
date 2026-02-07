@@ -1,76 +1,76 @@
-# +++ Modified By [telegram username: @Codeflix_Bots] +++
-# Don't Remove Credit @CodeFlix_Bots, @rohit_1888
-# Ask Doubt on telegram @CodeflixSupport
-
 import asyncio
 import base64
 import time
-import random
 from asyncio import Lock
 from collections import defaultdict
-from datetime import datetime, timedelta
-
 from pyrogram import Client, filters
 from pyrogram.enums import ParseMode, ChatMemberStatus, ChatAction
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery, InputMediaPhoto
 from pyrogram.errors import FloodWait, UserNotParticipant, UserIsBlocked, InputUserDeactivated
+import os
+from asyncio import sleep
+import random 
 
 from bot import Bot
+from datetime import datetime, timedelta
 from config import *
 from database.database import *
 from plugins.newpost import revoke_invite_after_5_minutes
 from helper_func import *
-from database.database import (
-    add_user,
-    get_fsub_channels,
-    get_channel_by_encoded_link,
-    get_channel_by_encoded_link2,
-    get_current_invite_link,
-    save_invite_link,
-    get_original_link,
-    is_user_banned,  # ← ADD THIS
-)
-
-
-# ==================== GLOBAL VARIABLES ====================
 
 # Create a lock dictionary for each channel to prevent concurrent link generation
 channel_locks = defaultdict(asyncio.Lock)
+
+user_banned_until = {}
 
 # Broadcast variables
 cancel_lock = asyncio.Lock()
 is_canceled = False
 
-# User ban tracking
-user_banned_until = {}
-user_message_count = {}
-
-# Chat info cache for force sub
+# Create a global dictionary to store chat data
 chat_data_cache = {}
 
-# Anti-spam settings
-MAX_MESSAGES = 3
-TIME_WINDOW = timedelta(seconds=10)
-BAN_DURATION = timedelta(hours=1)
-
-# ==================== MESSAGE EFFECTS (REACTIONS) ====================
-
-# Available Telegram message effects - you can add more effect IDs
-MESSAGE_EFFECTS = {
-    "fire": 5104841245755180586,      # 🔥 Fire effect
-    "like": 5107584321108051014,      # 👍 Like effect  
-    "celebrate": 5046509860389126442, # 🎉 Celebration
-    "heart": 5159385139981059251,     # ❤️ Heart
-}
-
-def get_random_effect():
-    """Get a random message effect"""
+async def is_subscribed(client: Client, user_id: int) -> bool:
+    """Check if user is subscribed to all force-sub channels"""
     try:
-        return random.choice(list(MESSAGE_EFFECTS.values()))
-    except:
-        return MESSAGE_EFFECTS["fire"]  # Default to fire
+        all_channels = await db.show_channels()
+        if not all_channels:
+            return True
+        
+        for chat_id in all_channels:
+            try:
+                member = await client.get_chat_member(chat_id, user_id)
+                if member.status not in [ChatMemberStatus.MEMBER, ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.OWNER]:
+                    return False
+            except UserNotParticipant:
+                return False
+            except Exception as e:
+                print(f"Error checking subscription for {chat_id}: {e}")
+                return False
+        
+        return True
+    except Exception as e:
+        print(f"Error in is_subscribed: {e}")
+        return True
 
-# ==================== START COMMAND ====================
+async def is_sub(client: Client, user_id: int, chat_id: int) -> bool:
+    """Check if user is subscribed to a specific channel"""
+    try:
+        member = await client.get_chat_member(chat_id, user_id)
+        return member.status in [ChatMemberStatus.MEMBER, ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.OWNER]
+    except UserNotParticipant:
+        return False
+    except Exception as e:
+        print(f"Error checking subscription: {e}")
+        return True
+
+async def delete_after_delay(msg, delay):
+    """Auto-delete message after delay"""
+    await asyncio.sleep(delay)
+    try:
+        await msg.delete()
+    except:
+        pass
 
 @Bot.on_message(filters.command('start') & filters.private)
 async def start_command(client: Bot, message: Message):
@@ -80,28 +80,16 @@ async def start_command(client: Bot, message: Message):
     if user_id in user_banned_until:
         if datetime.now() < user_banned_until[user_id]:
             return await message.reply_text(
-                "<b><blockquote expandable>You are temporarily banned from using commands due to spamming. Try again later.</b>",
+                "<b><blockquote expandable>You are temporarily banned from using commands due to spamming. Try again later.</blockquote></b>",
                 parse_mode=ParseMode.HTML
             )
-    
-    # Add user to database
+            
     await add_user(user_id)
 
-    # ✅ Check if user is permanently banned
-    if await is_user_banned(user_id):
-        return await message.reply_text(
-            "<b><blockquote expandable>⛔️ Yᴏᴜ ᴀʀᴇ Bᴀɴɴᴇᴅ ғʀᴏᴍ ᴜsɪɴɢ ᴛʜɪs ʙᴏᴛ.</b>\n\n"
-            "<i>Cᴏɴᴛᴀᴄᴛ sᴜᴘᴘᴏʀᴛ ɪғ ʏᴏᴜ ᴛʜɪɴᴋ ᴛʜɪs ɪs ᴀ ᴍɪsᴛᴀᴋᴇ.</i></blockquote>",
-            reply_markup=InlineKeyboardMarkup(
-                [[InlineKeyboardButton("Cᴏɴᴛᴀᴄᴛ Sᴜᴘᴘᴏʀᴛ", url=BAN_SUPPORT)]]
-            )
-        )
-
-    # ✅ Check Force Subscription
+    # Check Force Subscription
     if not await is_subscribed(client, user_id):
         return await not_joined(client, message)
 
-    # Handle deep links (encoded channel IDs)
     text = message.text
     if len(text) > 7:
         try:
@@ -116,7 +104,7 @@ async def start_command(client: Bot, message: Message):
             
             if not channel_id:
                 return await message.reply_text(
-                    "<b><blockquote expandable>Invalid or expired invite link.</b>",
+                    "<b><blockquote expandable>Invalid or expired invite link.</blockquote></b>",
                     parse_mode=ParseMode.HTML
                 )
 
@@ -127,7 +115,7 @@ async def start_command(client: Bot, message: Message):
                     [[InlineKeyboardButton("• Proceed to Link •", url=original_link)]]
                 )
                 return await message.reply_text(
-                    "<b><blockquote expandable>ʜᴇʀᴇ ɪs ʏᴏᴜʀ ʟɪɴᴋ! ᴄʟɪᴄᴋ ʙᴇʟᴏᴡ ᴛᴏ ᴘʀᴏᴄᴇᴇᴅ</b>",
+                    "<b><blockquote expandable>ʜᴇʀᴇ ɪs ʏᴏᴜʀ ʟɪɴᴋ! ᴄʟɪᴄᴋ ʙᴇʟᴏᴡ ᴛᴏ ᴘʀᴏᴄᴇᴇᴅ</blockquote></b>",
                     reply_markup=button,
                     parse_mode=ParseMode.HTML
                 )
@@ -184,7 +172,7 @@ async def start_command(client: Bot, message: Message):
             await wait_msg.delete()
             
             await message.reply_text(
-                "<b><blockquote expandable>ʜᴇʀᴇ ɪs ʏᴏᴜʀ ʟɪɴᴋ! ᴄʟɪᴄᴋ ʙᴇʟᴏᴡ ᴛᴏ ᴘʀᴏᴄᴇᴇᴅ</b>",
+                "<b><blockquote expandable>ʜᴇʀᴇ ɪs ʏᴏᴜʀ ʟɪɴᴋ! ᴄʟɪᴄᴋ ʙᴇʟᴏᴡ ᴛᴏ ᴘʀᴏᴄᴇᴇᴅ</blockquote></b>",
                 reply_markup=button,
                 parse_mode=ParseMode.HTML
             )
@@ -201,12 +189,11 @@ async def start_command(client: Bot, message: Message):
 
         except Exception as e:
             await message.reply_text(
-                "<b><blockquote expandable>Invalid or expired invite link.</b>",
+                "<b><blockquote expandable>Invalid or expired invite link.</blockquote></b>",
                 parse_mode=ParseMode.HTML
             )
             print(f"Decoding error: {e}")
     else:
-        # Show start message with buttons
         inline_buttons = InlineKeyboardMarkup(
             [
                 [InlineKeyboardButton("• ᴀʙᴏᴜᴛ", callback_data="about"),
@@ -221,13 +208,11 @@ async def start_command(client: Bot, message: Message):
         await wait_msg.delete()
         
         try:
-            # ✅ Send with FIRE EFFECT (reaction)
             await message.reply_photo(
                 photo=START_PIC,
                 caption=START_MSG,
                 reply_markup=inline_buttons,
-                parse_mode=ParseMode.HTML,
-                message_effect_id=MESSAGE_EFFECTS["fire"]  # 🔥 Fire effect on start!
+                parse_mode=ParseMode.HTML
             )
         except Exception as e:
             print(f"Error sending start picture: {e}")
@@ -238,59 +223,43 @@ async def start_command(client: Bot, message: Message):
             )
 
 
-# ==================== FORCE SUB (NOT JOINED) ====================
-
-async def is_subscribed(client: Bot, user_id: int) -> bool:
-    """Check if user is subscribed to all force sub channels"""
+async def get_link_creation_time(channel_id):
+    """Get the creation time of the current invite link for a channel."""
     try:
-        fsub_channels = await get_fsub_channels()
-        
-        # If no FSub channels configured, allow access
-        if not fsub_channels:
-            return True
-        
-        # Check each channel
-        for channel_id in fsub_channels:
-            if not await is_sub(client, user_id, channel_id):
-                return False
-        
-        return True
+        if IS_POSTGRES:
+            from database.database import get_connection
+            async with get_connection() as conn:
+                result = await conn.fetchval(
+                    "SELECT invite_link_created_at FROM channels WHERE channel_id = $1 AND status = 'active'",
+                    channel_id
+                )
+                return result
+        else:
+            from database.database import channels_collection
+            channel = await channels_collection.find_one({"channel_id": channel_id, "status": "active"})
+            if channel and "invite_link_created_at" in channel:
+                return channel["invite_link_created_at"]
+            return None
     except Exception as e:
-        print(f"Error checking subscription: {e}")
-        return True  # Allow on error to prevent blocking users
+        print(f"Error fetching link creation time for channel {channel_id}: {e}")
+        return None
 
-async def is_sub(client: Bot, user_id: int, channel_id: int) -> bool:
-    """Check if user is member of a specific channel"""
-    try:
-        member = await client.get_chat_member(channel_id, user_id)
-        return member.status in [
-            ChatMemberStatus.OWNER,
-            ChatMemberStatus.ADMINISTRATOR,
-            ChatMemberStatus.MEMBER
-        ]
-    except UserNotParticipant:
-        return False
-    except Exception as e:
-        print(f"Error checking membership for user {user_id} in channel {channel_id}: {e}")
-        return True  # Allow on error
-
-async def not_joined(client: Bot, message: Message):
-    """Show force subscription message"""
-    temp = await message.reply("<b><i>ᴡᴀɪᴛ ᴀ sᴇᴄ..</i></b>")
-
+async def not_joined(client: Client, message: Message):
+    """Handle users who haven't joined required channels"""
     user_id = message.from_user.id
     buttons = []
     count = 0
 
     try:
-        all_channels = await get_fsub_channels()
-        
+        all_channels = await db.show_channels()
         for total, chat_id in enumerate(all_channels, start=1):
+            mode = await db.get_channel_mode(chat_id)
+
             await message.reply_chat_action(ChatAction.TYPING)
 
             if not await is_sub(client, user_id, chat_id):
                 try:
-                    # Use cache for chat info
+                    # Cache chat info
                     if chat_id in chat_data_cache:
                         data = chat_data_cache[chat_id]
                     else:
@@ -299,96 +268,73 @@ async def not_joined(client: Bot, message: Message):
 
                     name = data.title
 
-                    # Generate invite link
-                    if data.username:
-                        link = f"https://t.me/{data.username}"
-                    else:
-                        # Create temporary invite link for private channels
+                    # Generate proper invite link based on the mode
+                    if mode == "on" and not data.username:
                         invite = await client.create_chat_invite_link(
                             chat_id=chat_id,
-                            expire_date=datetime.utcnow() + timedelta(hours=1)
+                            creates_join_request=True,
+                            expire_date=datetime.utcnow() + timedelta(seconds=FSUB_LINK_EXPIRY) if FSUB_LINK_EXPIRY else None
                         )
                         link = invite.invite_link
+                    else:
+                        if data.username:
+                            link = f"https://t.me/{data.username}"
+                        else:
+                            invite = await client.create_chat_invite_link(
+                                chat_id=chat_id,
+                                expire_date=datetime.utcnow() + timedelta(seconds=FSUB_LINK_EXPIRY) if FSUB_LINK_EXPIRY else None
+                            )
+                            link = invite.invite_link
 
-                    buttons.append([InlineKeyboardButton(text=f"📢 {name}", url=link)])
+                    buttons.append([InlineKeyboardButton(text=name, url=link)])
                     count += 1
-                    await temp.edit(f"<b>{'! ' * count}</b>")
 
                 except Exception as e:
                     print(f"Error with chat {chat_id}: {e}")
-                    return await temp.edit(
-                        f"<b><i>! Eʀʀᴏʀ, Cᴏɴᴛᴀᴄᴛ ᴅᴇᴠᴇʟᴏᴘᴇʀ ᴛᴏ sᴏʟᴠᴇ ᴛʜᴇ ɪssᴜᴇs @ProYato</i></b>\n"
-                        f"<blockquote expandable><b>Rᴇᴀsᴏɴ:</b> {e}</blockquote>"
-                    )
 
-        # Add retry button
+        # Retry Button
         try:
             buttons.append([
                 InlineKeyboardButton(
                     text='♻️ Tʀʏ Aɢᴀɪɴ',
-                    url=f"https://t.me/{client.username}?start={message.command[1] if len(message.command) > 1 else ''}"
+                    url=f"https://t.me/{client.username}?start={message.command[1]}"
                 )
             ])
         except IndexError:
-            buttons.append([
-                InlineKeyboardButton(
-                    text='♻️ Tʀʏ Aɢᴀɪɴ',
-                    url=f"https://t.me/{client.username}?start="
-                )
-            ])
-
-        # Delete temp message
-        await temp.delete()
-
-        # Send force sub message
-        force_pic = os.environ.get("FORCE_PIC", START_PIC)
-        force_msg = os.environ.get(
-            "FORCE_MSG",
-            "<b>🔒 You Must Join Our Channel(s) To Use This Bot\n\n"
-            "👇 Click the button(s) below to join, then click 'Try Again'</b>"
-        )
+            pass
 
         await message.reply_photo(
-            photo=force_pic,
-            caption=force_msg,
+            photo=FORCE_PIC,
+            caption=FORCE_MSG.format(
+                first=message.from_user.first_name,
+                last=message.from_user.last_name,
+                username=None if not message.from_user.username else '@' + message.from_user.username,
+                mention=message.from_user.mention,
+                id=message.from_user.id
+            ),
             reply_markup=InlineKeyboardMarkup(buttons),
+        )
+
+    except Exception as e:
+        print(f"Final Error: {e}")
+
+@Bot.on_callback_query(filters.regex("close"))
+async def close_callback(client: Bot, callback_query):
+    await callback_query.answer()
+    await callback_query.message.delete()
+
+@Bot.on_callback_query(filters.regex("check_sub"))
+async def check_sub_callback(client: Bot, callback_query: CallbackQuery):
+    user_id = callback_query.from_user.id
+    
+    # Re-check subscription
+    if await is_subscribed(client, user_id):
+        await callback_query.message.edit_text(
+            "<b>You are subscribed to all required channels! Use /start to proceed.</b>",
             parse_mode=ParseMode.HTML
         )
-
-    except Exception as e:
-        print(f"Final Error in not_joined: {e}")
-        await temp.edit(
-            f"<b><i>! Eʀʀᴏʀ, Cᴏɴᴛᴀᴄᴛ ᴅᴇᴠᴇʟᴏᴘᴇʀ @ProYato</i></b>\n"
-            f"<blockquote expandable><b>Rᴇᴀsᴏɴ:</b> {e}</blockquote>"
-        )
-
-
-# ==================== HELPER FUNCTIONS ====================
-
-async def get_link_creation_time(channel_id):
-    """Get the creation time of the current invite link for a channel."""
-    try:
-        from database.database import channels_collection
-        channel = await channels_collection.find_one({"channel_id": channel_id, "status": "active"})
-        if channel and "invite_link_created_at" in channel:
-            return channel["invite_link_created_at"]
-        return None
-    except Exception as e:
-        print(f"Error fetching link creation time for channel {channel_id}: {e}")
-        return None
-
-def delete_after_delay(msg, delay):
-    """Delete message after specified delay"""
-    async def inner():
-        await asyncio.sleep(delay)
-        try:
-            await msg.delete()
-        except:
-            pass
-    return inner()
-
-
-# ==================== STATUS COMMAND ====================
+    else:
+        await not_joined(client, callback_query.message)
 
 @Bot.on_message(filters.command('status') & filters.private & is_owner_or_admin)
 async def info(client: Bot, message: Message):   
@@ -411,20 +357,16 @@ async def info(client: Bot, message: Message):
         parse_mode=ParseMode.HTML
     )
 
-
-# ==================== BROADCAST COMMANDS ====================
-
+# Handler for the /cancel command
 @Bot.on_message(filters.command('cancel') & filters.private & is_owner_or_admin)
 async def cancel_broadcast(client: Bot, message: Message):
-    """Cancel ongoing broadcast"""
     global is_canceled
     async with cancel_lock:
         is_canceled = True
-    await message.reply("<b>✅ Broadcast will be canceled.</b>")
+    await message.reply("<b>Broadcast will be canceled...</b>")
 
 @Bot.on_message(filters.private & filters.command('broadcast') & is_owner_or_admin)
 async def broadcast(client: Bot, message: Message):
-    """Broadcast message to all users"""
     global is_canceled
     args = message.text.split()[1:]
 
@@ -440,7 +382,7 @@ async def broadcast(client: Bot, message: Message):
         await asyncio.sleep(8)
         return await msg.delete()
 
-    # Parse arguments
+    # Defaults
     do_pin = False
     do_delete = False
     duration = 0
@@ -523,7 +465,7 @@ async def broadcast(client: Bot, message: Message):
             unsuccessful += 1
             await del_user(chat_id)
 
-        # Update progress
+        # Progress
         percent_complete = i / total
         if percent_complete - last_update_percentage >= update_interval or last_update_percentage == 0:
             num_blocks = int(percent_complete * bar_length)
@@ -554,21 +496,18 @@ async def broadcast(client: Bot, message: Message):
 ›› Unsuccessful: <code>{unsuccessful}</code></b>"""
     return await pls_wait.edit(final_status)
 
+
 async def auto_delete(sent_msg, duration):
-    """Auto delete broadcast message after duration"""
+    """Helper for delete mode"""
     await asyncio.sleep(duration)
     try:
         await sent_msg.delete()
     except:
         pass
 
-
-# ==================== CALLBACK QUERY HANDLER ====================
-
 @Bot.on_callback_query()
 async def cb_handler(client: Bot, query: CallbackQuery):
     data = query.data  
-    chat_id = query.message.chat.id
     
     if data == "close":
         await query.message.delete()
@@ -578,29 +517,47 @@ async def cb_handler(client: Bot, query: CallbackQuery):
             pass
     
     elif data == "about":
-        await query.edit_message_media(
-            InputMediaPhoto(
-                "https://envs.sh/Wdj.jpg",
-                ABOUT_TXT
-            ),
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton('• ʙᴀᴄᴋ', callback_data='start'), 
-                 InlineKeyboardButton('ᴄʟᴏsᴇ •', callback_data='close')]
-            ]),
-        )
+        user = await client.get_users(OWNER_ID)
+        user_link = f"https://t.me/{user.username}" if user.username else f"tg://openmessage?user_id={OWNER_ID}"
+        
+        try:
+            await query.edit_message_media(
+                InputMediaPhoto(
+                    "https://envs.sh/Wdj.jpg",
+                    ABOUT_TXT
+                ),
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton('• ʙᴀᴄᴋ', callback_data='start'), InlineKeyboardButton('ᴄʟᴏsᴇ •', callback_data='close')]
+                ]),
+            )
+        except:
+            await query.message.edit_text(
+                ABOUT_TXT,
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton('• ʙᴀᴄᴋ', callback_data='start'), InlineKeyboardButton('ᴄʟᴏsᴇ •', callback_data='close')]
+                ]),
+                parse_mode=ParseMode.HTML
+            )
 
     elif data == "channels":
-        await query.edit_message_media(
-            InputMediaPhoto(
-                "https://envs.sh/Wdj.jpg", 
-                CHANNELS_TXT
-            ),
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton('• ʙᴀᴄᴋ', callback_data='start'), 
-                 InlineKeyboardButton('ᴄʟᴏsᴇ •', callback_data='close')]
-            ]),
-        )
-        
+        try:
+            await query.edit_message_media(
+                InputMediaPhoto("https://envs.sh/Wdj.jpg", 
+                                CHANNELS_TXT
+                ),
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton('• ʙᴀᴄᴋ', callback_data='start'), InlineKeyboardButton('ᴄʟᴏsᴇ •', callback_data='close')]
+                ]),
+            )
+        except:
+            await query.message.edit_text(
+                CHANNELS_TXT,
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton('• ʙᴀᴄᴋ', callback_data='start'), InlineKeyboardButton('ᴄʟᴏsᴇ •', callback_data='close')]
+                ]),
+                parse_mode=ParseMode.HTML
+            )
+    
     elif data in ["start", "home"]:
         inline_buttons = InlineKeyboardMarkup(
             [
@@ -619,8 +576,64 @@ async def cb_handler(client: Bot, query: CallbackQuery):
             )
         except Exception as e:
             print(f"Error sending start/home photo: {e}")
-            await query.edit_message_text(
+            await query.message.edit_text(
                 START_MSG,
                 reply_markup=inline_buttons,
                 parse_mode=ParseMode.HTML
             )
+
+    elif data.startswith("rfs_ch_"):
+        cid = int(data.split("_")[2])
+        try:
+            chat = await client.get_chat(cid)
+            mode = await db.get_channel_mode(cid)
+            status = "🟢 ᴏɴ" if mode == "on" else "🔴 ᴏғғ"
+            new_mode = "ᴏғғ" if mode == "on" else "on"
+            buttons = [
+                [InlineKeyboardButton(f"ʀᴇǫ ᴍᴏᴅᴇ {'OFF' if mode == 'on' else 'ON'}", callback_data=f"rfs_toggle_{cid}_{new_mode}")],
+                [InlineKeyboardButton("‹ ʙᴀᴄᴋ", callback_data="fsub_back")]
+            ]
+            await query.message.edit_text(
+                f"Channel: {chat.title}\nCurrent Force-Sub Mode: {status}",
+                reply_markup=InlineKeyboardMarkup(buttons)
+            )
+        except Exception:
+            await query.answer("Failed to fetch channel info", show_alert=True)
+
+    elif data.startswith("rfs_toggle_"):
+        cid, action = data.split("_")[2:]
+        cid = int(cid)
+        mode = "on" if action == "on" else "off"
+
+        await db.set_channel_mode(cid, mode)
+        await query.answer(f"Force-Sub set to {'ON' if mode == 'on' else 'OFF'}")
+
+        # Refresh the same channel's mode view
+        chat = await client.get_chat(cid)
+        status = "🟢 ON" if mode == "on" else "🔴 OFF"
+        new_mode = "off" if mode == "on" else "on"
+        buttons = [
+            [InlineKeyboardButton(f"ʀᴇǫ ᴍᴏᴅᴇ {'OFF' if mode == 'on' else 'ON'}", callback_data=f"rfs_toggle_{cid}_{new_mode}")],
+            [InlineKeyboardButton("‹ ʙᴀᴄᴋ", callback_data="fsub_back")]
+        ]
+        await query.message.edit_text(
+            f"Channel: {chat.title}\nCurrent Force-Sub Mode: {status}",
+            reply_markup=InlineKeyboardMarkup(buttons)
+        )
+
+    elif data == "fsub_back":
+        channels = await db.show_channels()
+        buttons = []
+        for cid in channels:
+            try:
+                chat = await client.get_chat(cid)
+                mode = await db.get_channel_mode(cid)
+                status = "🟢" if mode == "on" else "🔴"
+                buttons.append([InlineKeyboardButton(f"{status} {chat.title}", callback_data=f"rfs_ch_{cid}")])
+            except:
+                continue
+
+        await query.message.edit_text(
+            "sᴇʟᴇᴄᴛ ᴀ ᴄʜᴀɴɴᴇʟ ᴛᴏ ᴛᴏɢɢʟᴇ ɪᴛs ғᴏʀᴄᴇ-sᴜʙ ᴍᴏᴅᴇ:",
+            reply_markup=InlineKeyboardMarkup(buttons)
+        )
