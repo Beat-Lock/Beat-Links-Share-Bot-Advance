@@ -12,6 +12,8 @@ database = dbclient[DB_NAME]
 user_data = database['users']
 channels_collection = database['channels']
 fsub_channels_collection = database['fsub_channels']
+# Ban User Collection
+ban_users_collection = database['ban_users']
 
 async def add_user(user_id: int) -> bool:
     """Add a user to the database if they don't exist."""
@@ -344,3 +346,49 @@ async def is_approval_off(channel_id: int) -> bool:
     except Exception as e:
         print(f"Error checking approval_off for channel {channel_id}: {e}")
         return False
+# ==================== ADD THESE FUNCTIONS TO database/database.py ====================
+
+
+async def add_ban_user(user_id: int) -> bool:
+    """Add a user to the ban list"""
+    if not isinstance(user_id, int) or user_id <= 0:
+        print(f"Invalid user_id for ban: {user_id}")
+        return False
+    
+    try:
+        existing_ban = await ban_users_collection.find_one({'_id': user_id})
+        if existing_ban:
+            return False
+        
+        await ban_users_collection.insert_one({
+            '_id': user_id,
+            'banned_at': datetime.utcnow()
+        })
+        return True
+    except Exception as e:
+        print(f"Error adding ban user {user_id}: {e}")
+        return False
+
+async def del_ban_user(user_id: int) -> bool:
+    """Remove a user from the ban list"""
+    try:
+        result = await ban_users_collection.delete_one({'_id': user_id})
+        return result.deleted_count > 0
+    except Exception as e:
+        print(f"Error deleting ban user {user_id}: {e}")
+        return False
+
+async def get_ban_users() -> List[int]:
+    """Get all banned user IDs"""
+    try:
+        ban_docs = ban_users_collection.find()
+        return [doc['_id'] async for doc in ban_docs]
+    except Exception as e:
+        print(f"Error fetching banned users: {e}")
+        return []
+
+async def is_user_banned(user_id: int) -> bool:
+    """Check if a user is banned"""
+    if not isinstance(user_id, int):
+        return False
+    return bool(await ban_users_collection.find_one({'_id': user_id}))
