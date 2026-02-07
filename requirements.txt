@@ -1,10 +1,22 @@
+# Telegram Bot Framework
 pyrofork==2.3.59
 TgCrypto 
 pyromod
 python-dotenv
+
+# Database Support - Both MongoDB and PostgreSQL
+# MongoDB
 pymongo 
 dnspython 
 motor 
+
+# PostgreSQL (Neon)
+asyncpg==0.29.0
+
+# Web Server
 aiohttp
 asyncio
 aiofiles
+
+# System utilities
+psutil
