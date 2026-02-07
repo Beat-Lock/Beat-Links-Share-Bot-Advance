@@ -1,8 +1,11 @@
-# +++ Modified By [telegram username: @Codeflix_Bots
 import os
 from os import environ
 import logging
+import re  # ← ADD THIS
 from logging.handlers import RotatingFileHandler
+
+# Add after imports
+id_pattern = re.compile(r'^-?\d+$')  # ← ADD THIS
 
 # Recommended
 TG_BOT_TOKEN = os.environ.get("TG_BOT_TOKEN", "")
