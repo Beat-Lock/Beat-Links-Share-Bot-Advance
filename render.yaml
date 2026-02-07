@@ -1,0 +1,30 @@
+services:
+  - type: web
+    name: linksharebot
+    env: python
+    region: singapore
+    plan: free
+    branch: main
+    buildCommand: pip install -r requirements.txt
+    startCommand: python3 main.py
+    envVars:
+      - key: TG_BOT_TOKEN
+        sync: false
+      - key: APP_ID
+        sync: false
+      - key: API_HASH
+        sync: false
+      - key: OWNER_ID
+        sync: false
+      - key: ADMINS
+        sync: false
+      - key: DB_URI
+        sync: false
+      - key: DB_NAME
+        value: link
+      - key: DATABASE_CHANNEL
+        sync: false
+      - key: PORT
+        value: 8080
+      - key: PYTHON_VERSION
+        value: 3.11.0
