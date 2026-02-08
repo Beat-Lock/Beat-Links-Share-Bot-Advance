@@ -92,7 +92,7 @@ async def get_fsub_channels_not_joined(client: Client, user_id: int) -> list:
     
     return not_joined
 
-async def show_fsub_panel(client: Client, message: Message, not_joined_channels: list):
+async def show_fsub_panel(client: Client, message: Message, not_joined_channels: list, original_start_param: str = None):
     """Display the Force Subscribe panel with join buttons"""
     buttons = []
     
@@ -179,21 +179,20 @@ async def show_fsub_panel(client: Client, message: Message, not_joined_channels:
         )
         return
     
-    # Add "Try Again" button - Make it prominent
+    # Add "Try Again" button - Make it prominent and preserve original parameter
     try:
-        # Try to get the start parameter if available
-        start_param = message.text.split()[1] if len(message.text.split()) > 1 else ""
-        if start_param:
-            retry_url = f"https://t.me/{client.username}?start={start_param}"
+        # Use the original start parameter if available, otherwise use "refresh"
+        if original_start_param:
+            retry_url = f"https://t.me/{client.username}?start={original_start_param}"
         else:
             retry_url = f"https://t.me/{client.username}?start=refresh"
         
         # Add reload button after all channel buttons
         buttons.append([InlineKeyboardButton(text='♻️ Try Again', url=retry_url)])
-        print(f"✅ Reload button added")
+        print(f"✅ Reload button added with URL: {retry_url}")
     except Exception as e:
         print(f"⚠️ Error adding reload button: {e}")
-        buttons.append([InlineKeyboardButton(text='♻️ Try Again ', url=f"https://t.me/{client.username}")])
+        buttons.append([InlineKeyboardButton(text='♻️ Try Again', url=f"https://t.me/{client.username}?start=refresh")])
     
     print(f"✅ Total buttons created: {len(buttons)}")
     
@@ -291,14 +290,25 @@ async def start_command(client: Bot, message: Message):
     except Exception as e:
         print(f"⚠️ Error adding user to database: {e}")
 
-    # ✅ STEP 3: CHECK FORCE SUBSCRIPTION
+    # ✅ STEP 3: Parse start parameter FIRST (before FSub check)
+    text = message.text
+    start_param = None
+    is_refresh = False
+    
+    if len(text) > 7:
+        start_param = text.split(" ", 1)[1]
+        is_refresh = start_param == "refresh"
+        print(f"🔗 Start parameter detected: {start_param} (is_refresh: {is_refresh})")
+
+    # ✅ STEP 4: CHECK FORCE SUBSCRIPTION
     try:
         not_joined_channels = await get_fsub_channels_not_joined(client, user_id)
         
         if not_joined_channels:
             print(f"❌ User {user_id} needs to join {len(not_joined_channels)} channel(s)")
             print(f"   Channels: {[ch['title'] for ch in not_joined_channels]}")
-            await show_fsub_panel(client, message, not_joined_channels)
+            # Pass the original start parameter to FSub panel so it can be preserved
+            await show_fsub_panel(client, message, not_joined_channels, start_param if not is_refresh else None)
             return
         else:
             print(f"✅ User {user_id} joined all FSub channels (or none configured)")
@@ -307,12 +317,11 @@ async def start_command(client: Bot, message: Message):
         import traceback
         traceback.print_exc()
 
-    # ✅ STEP 4: PROCESS START PARAMETER (if any)
-    text = message.text
-    if len(text) > 7:
+    # ✅ STEP 5: PROCESS START PARAMETER (if any and not refresh)
+    if start_param and not is_refresh:
         print(f"🔗 Processing start parameter...")
         try:
-            base64_string = text.split(" ", 1)[1]
+            base64_string = start_param
             is_request = base64_string.startswith("req_")
             
             if is_request:
@@ -417,7 +426,7 @@ async def start_command(client: Bot, message: Message):
                 parse_mode=ParseMode.HTML
             )
     else:
-        # ✅ STEP 5: SEND WELCOME MESSAGE
+        # ✅ STEP 6: SEND WELCOME MESSAGE (no start parameter or just refresh)
         print(f"📬 Sending welcome message to user {user_id}")
         inline_buttons = InlineKeyboardMarkup(
             [
