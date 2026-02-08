@@ -23,11 +23,11 @@ from pyrogram.errors.exceptions.bad_request_400 import UserNotParticipant
 from pyrogram.errors import FloodWait, UserIsBlocked, InputUserDeactivated, UserNotParticipant
 from bot import Bot
 from config import *
-from helper_func import admin  # ✅ Import admin filter from helper_func
+from helper_func import is_owner_or_admin  # ✅ Import admin filter from helper_func
 from database.database import db  # ✅ Import db instance
 
 #BAN-USER-SYSTEM
-@Bot.on_message(filters.private & filters.command('ban') & admin)
+@Bot.on_message(filters.private & filters.command('ban') & is_owner_or_admin)
 async def add_banuser(client: Client, message: Message):        
     pro = await message.reply("⏳ <i>Pʀᴏᴄᴇssɪɴɢ ʀᴇǫᴜᴇsᴛ...</i>", quote=True)
     banuser_ids = await db.get_ban_users()
@@ -71,7 +71,7 @@ async def add_banuser(client: Client, message: Message):
     else:
         await pro.edit(f"<b>❌ Nᴏ ᴜsᴇʀs ᴡᴇʀᴇ ʙᴀɴɴᴇᴅ.</b>\n\n{report}", reply_markup=reply_markup)
 
-@Bot.on_message(filters.private & filters.command('unban') & admin)
+@Bot.on_message(filters.private & filters.command('unban') & is_owner_or_admin)
 async def delete_banuser(client: Client, message: Message):        
     pro = await message.reply("⏳ <i>Pʀᴏᴄᴇssɪɴɢ ʀᴇǫᴜᴇsᴛ...</i>", quote=True)
     banuser_ids = await db.get_ban_users()
@@ -112,7 +112,7 @@ async def delete_banuser(client: Client, message: Message):
 
     await pro.edit(f"<b>🚫 Uɴʙᴀɴ Rᴇᴘᴏʀᴛ:</b>\n\n{report}", reply_markup=reply_markup)
 
-@Bot.on_message(filters.private & filters.command('banlist') & admin)
+@Bot.on_message(filters.private & filters.command('banlist') & is_owner_or_admin)
 async def get_banuser_list(client: Client, message: Message):        
     pro = await message.reply("⏳ <i>Fᴇᴛᴄʜɪɴɢ Bᴀɴ Lɪsᴛ...</i>", quote=True)
     banuser_ids = await db.get_ban_users()
