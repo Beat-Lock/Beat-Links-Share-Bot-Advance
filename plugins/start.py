@@ -211,6 +211,7 @@ async def show_fsub_panel(client: Client, message: Message, not_joined_channels:
         # Add instruction text
         instruction_text = (
             f"ʏᴏᴜ ʜᴀᴠᴇɴᴛ ᴊᴏɪɴ {len(not_joined_channels)}.ᴘʟᴇᴀsᴇ ᴊᴏɪɴ ɪɴ ᴍʏ ᴄʜᴀɴɴᴇʟ/ɢʀᴏᴜᴘ ᴘʀᴏᴠɪᴅᴇᴅ ʙᴇʟᴏᴡ, ᴛʜᴇɴ ᴛʀʏ ᴀɢᴀɪɴ.. ! </b>"
+            f"❗ғᴀᴄɪɴɢ ᴘʀᴏʙʟᴇᴍs. ᴜsᴇ /help"
         )
         
         full_caption = fsub_caption + instruction_text
