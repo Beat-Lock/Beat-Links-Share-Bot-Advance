@@ -1,10 +1,10 @@
-# +++ Modified By Yato [telegram username: @i_killed_my_clan & @ProYato] +++ # aNDI BANDI SANDI JISNE BHI CREDIT HATAYA USKI BANDI RAndi 
+
 import os
 import asyncio
 from config import *
 from pyrogram import Client, filters
 from pyrogram.types import Message, User, ChatJoinRequest, InlineKeyboardMarkup, InlineKeyboardButton
-from pyrogram.errors import FloodWait, ChatAdminRequired, RPCError, UserNotParticipant
+from pyrogram.errors import FloodWait, ChatAdminRequired, RPCError, UserNotParticipant, UserAlreadyParticipant
 from database.database import set_approval_off, is_approval_off
 from helper_func import *
 
@@ -38,33 +38,50 @@ async def autoapprove(client, message: ChatJoinRequest):
     
     await asyncio.sleep(APPROVAL_WAIT_TIME)
 
-    # Check if user is already a participant before approving
+    # ✅ Check if user is already a participant before approving
     try:
         member = await client.get_chat_member(chat.id, user.id)
         if member.status in ["member", "administrator", "creator"]:
-            print(f"User {user.id} is already a participant of {chat.id}, skipping approval.")
+            print(f"✅ User {user.id} is already a participant of {chat.id}, skipping approval.")
             return
     except UserNotParticipant:
-        # User is not a member, handle accordingly
+        # User is not a member, proceed with approval
         pass
+    except Exception as e:
+        print(f"⚠️ Error checking member status: {e}")
+        # Continue with approval attempt anyway
 
-    await client.approve_chat_join_request(chat_id=chat.id, user_id=user.id)
+    # ✅ Try to approve with proper error handling
+    try:
+        await client.approve_chat_join_request(chat_id=chat.id, user_id=user.id)
+        print(f"✅ Approved join request for {user.first_name} ({user.id}) in {chat.title}")
+    except UserAlreadyParticipant:
+        print(f"⚠️ User {user.id} already joined {chat.id} before approval")
+        return
+    except Exception as e:
+        print(f"❌ Failed to approve {user.id} in {chat.id}: {e}")
+        return
     
+    # Send welcome message if enabled
     if APPROVED == "on":
-        invite_link = await client.export_chat_invite_link(chat.id)
-        buttons = [
-            [InlineKeyboardButton('• ᴊᴏɪɴ ᴍʏ ᴜᴘᴅᴀᴛᴇs •', url='https://t.me/Codeflix_Bots')],
-            [InlineKeyboardButton(f'• ᴊᴏɪɴ {chat.title} •', url=invite_link)]
-        ]
-        markup = InlineKeyboardMarkup(buttons)
-        caption = f"<b>ʜᴇʏ {user.mention()},\n\n<blockquote> ʏᴏᴜʀ ʀᴇǫᴜᴇsᴛ ᴛᴏ ᴊᴏɪɴ _{chat.title} ʜᴀs ʙᴇᴇɴ ᴀᴘᴘʀᴏᴠᴇᴅ.</blockquote> </b>"
-        
-        await client.send_photo(
-            chat_id=user.id,
-            photo='https://telegra.ph/file/f3d3aff9ec422158feb05-d2180e3665e0ac4d32.jpg',
-            caption=caption,
-            reply_markup=markup
-        )
+        try:
+            invite_link = await client.export_chat_invite_link(chat.id)
+            buttons = [
+                [InlineKeyboardButton('• ᴊᴏɪɴ ᴍʏ ᴜᴘᴅᴀᴛᴇs •', url='https://t.me/BeatAnime')],
+                [InlineKeyboardButton(f'• ᴊᴏɪɴ {chat.title} •', url=invite_link)]
+            ]
+            markup = InlineKeyboardMarkup(buttons)
+            caption = f"<b>ʜᴇʏ {user.mention()},\n\n<blockquote> ʏᴏᴜʀ ʀᴇǫᴜᴇsᴛ ᴛᴏ ᴊᴏɪɴ {chat.title} ʜᴀs ʙᴇᴇɴ ᴀᴘᴘʀᴏᴠᴇᴅ.</blockquote> </b>"
+            
+            await client.send_photo(
+                chat_id=user.id,
+                photo='https://telegra.ph/file/f3d3aff9ec422158feb05-d2180e3665e0ac4d32.jpg',
+                caption=caption,
+                reply_markup=markup
+            )
+            print(f"✅ Sent welcome message to {user.id}")
+        except Exception as e:
+            print(f"⚠️ Failed to send welcome message to {user.id}: {e}")
 
 @Client.on_message(filters.command("reqtime") & is_owner_or_admin)
 async def set_reqtime(client, message: Message):
