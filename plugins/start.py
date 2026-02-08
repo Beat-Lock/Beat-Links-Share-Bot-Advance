@@ -76,7 +76,15 @@ async def delete_after_delay(msg, delay):
 async def start_command(client: Bot, message: Message):
     user_id = message.from_user.id
 
-    # Check if user is temporarily banned
+    # ✅ CHECK IF USER IS BANNED FIRST
+    if await db.ban_user_exist(user_id):
+        return await message.reply_text(
+            f"<b>🚫 Yᴏᴜ ᴀʀᴇ ʙᴀɴɴᴇᴅ ғʀᴏᴍ ᴜsɪɴɢ ᴛʜɪs ʙᴏᴛ!</b>\n\n"
+            f"<b>Cᴏɴᴛᴀᴄᴛ:</b> {BAN_SUPPORT if 'BAN_SUPPORT' in globals() else 'Bot Admin'}",
+            parse_mode=ParseMode.HTML
+        )
+
+    # Check if user is temporarily banned (spam protection)
     if user_id in user_banned_until:
         if datetime.now() < user_banned_until[user_id]:
             return await message.reply_text(
@@ -252,6 +260,12 @@ async def not_joined(client: Client, message: Message):
 
     try:
         all_channels = await db.show_channels()
+        
+        # If no FSub channels configured, allow user to proceed
+        if not all_channels:
+            print("No FSub channels configured, allowing user to proceed")
+            return False
+        
         for total, chat_id in enumerate(all_channels, start=1):
             mode = await db.get_channel_mode(chat_id)
 
@@ -292,6 +306,10 @@ async def not_joined(client: Client, message: Message):
                 except Exception as e:
                     print(f"Error with chat {chat_id}: {e}")
 
+        # If no buttons (user joined all), return False
+        if not buttons:
+            return False
+
         # Retry Button
         try:
             buttons.append([
@@ -301,7 +319,12 @@ async def not_joined(client: Client, message: Message):
                 )
             ])
         except IndexError:
-            pass
+            buttons.append([
+                InlineKeyboardButton(
+                    text='♻️ Tʀʏ Aɢᴀɪɴ',
+                    url=f"https://t.me/{client.username}?start=refresh"
+                )
+            ])
 
         await message.reply_photo(
             photo=FORCE_PIC,
@@ -314,9 +337,11 @@ async def not_joined(client: Client, message: Message):
             ),
             reply_markup=InlineKeyboardMarkup(buttons),
         )
+        return True
 
     except Exception as e:
-        print(f"Final Error: {e}")
+        print(f"Final Error in not_joined: {e}")
+        return False
 
 @Bot.on_callback_query(filters.regex("close"))
 async def close_callback(client: Bot, callback_query):
