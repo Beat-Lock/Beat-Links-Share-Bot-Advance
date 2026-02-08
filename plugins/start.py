@@ -96,41 +96,69 @@ async def show_fsub_panel(client: Client, message: Message, not_joined_channels:
     """Display the Force Subscribe panel with join buttons"""
     buttons = []
     
-    for channel_info in not_joined_channels:
+    print(f"🔧 Creating FSub panel for {len(not_joined_channels)} channels")
+    
+    for idx, channel_info in enumerate(not_joined_channels, 1):
         channel_id = channel_info['id']
         chat = channel_info['chat']
         
         try:
+            print(f"  Processing channel {idx}: {chat.title} ({channel_id})")
+            
             # Get channel mode (request link or normal invite)
             mode = await db.get_channel_mode(channel_id)
+            print(f"    Mode: {mode}")
             
             # Generate invite link
             if mode == "on" and not chat.username:
                 # Create request link
+                print(f"    Creating request link...")
                 invite = await client.create_chat_invite_link(
                     chat_id=channel_id,
                     creates_join_request=True,
                     expire_date=datetime.utcnow() + timedelta(seconds=FSUB_LINK_EXPIRY) if FSUB_LINK_EXPIRY else None
                 )
                 link = invite.invite_link
+                print(f"    ✅ Request link created")
             else:
                 # Create normal invite link or use username
                 if chat.username:
                     link = f"https://t.me/{chat.username}"
+                    print(f"    ✅ Using public link: @{chat.username}")
                 else:
+                    print(f"    Creating invite link...")
                     invite = await client.create_chat_invite_link(
                         chat_id=channel_id,
                         expire_date=datetime.utcnow() + timedelta(seconds=FSUB_LINK_EXPIRY) if FSUB_LINK_EXPIRY else None
                     )
                     link = invite.invite_link
+                    print(f"    ✅ Invite link created")
             
-            # Add button for this channel
-            buttons.append([InlineKeyboardButton(text=f"📢 {chat.title}", url=link)])
+            # Add button for this channel - Each channel on its own row for better visibility
+            button_text = f"📢 JOIN {chat.title.upper()}"
+            buttons.append([InlineKeyboardButton(text=button_text, url=link)])
+            print(f"    ✅ Button added: {button_text}")
             
         except Exception as e:
-            print(f"❌ Error creating button for channel {channel_id}: {e}")
+            print(f"    ❌ Error creating button for channel {channel_id}: {e}")
+            import traceback
+            traceback.print_exc()
+            # Add error button to inform user
+            buttons.append([InlineKeyboardButton(
+                text=f"⚠️ Error: {chat.title}", 
+                url=f"https://t.me/{client.username}"
+            )])
     
-    # Add "Try Again" button
+    # Check if we have any buttons
+    if not buttons:
+        print("⚠️ No buttons were created! Falling back to text message.")
+        await message.reply_text(
+            "<b>⚠️ Please contact admin - FSub channels configured but buttons failed to generate.</b>",
+            parse_mode=ParseMode.HTML
+        )
+        return
+    
+    # Add "Try Again" button - Make it prominent
     try:
         # Try to get the start parameter if available
         start_param = message.text.split()[1] if len(message.text.split()) > 1 else ""
@@ -139,30 +167,66 @@ async def show_fsub_panel(client: Client, message: Message, not_joined_channels:
         else:
             retry_url = f"https://t.me/{client.username}?start=refresh"
         
-        buttons.append([InlineKeyboardButton(text='♻️ Tʀʏ Aɢᴀɪɴ', url=retry_url)])
-    except:
-        buttons.append([InlineKeyboardButton(text='♻️ Tʀʏ Aɢᴀɪɴ', url=f"https://t.me/{client.username}")])
+        # Add reload button after all channel buttons
+        buttons.append([InlineKeyboardButton(text='🔄 RELOAD / CHECK STATUS', url=retry_url)])
+        print(f"✅ Reload button added")
+    except Exception as e:
+        print(f"⚠️ Error adding reload button: {e}")
+        buttons.append([InlineKeyboardButton(text='🔄 RELOAD', url=f"https://t.me/{client.username}")])
+    
+    print(f"✅ Total buttons created: {len(buttons)}")
     
     # Send FSub message
     try:
+        # Create the message text
+        fsub_caption = FORCE_MSG.format(
+            first=message.from_user.first_name,
+            last=message.from_user.last_name if message.from_user.last_name else "",
+            username=f"@{message.from_user.username}" if message.from_user.username else "None",
+            mention=message.from_user.mention,
+            id=message.from_user.id
+        )
+        
+        # Add instruction text
+        instruction_text = (
+            f"\n\n<b>📋 INSTRUCTIONS:</b>\n"
+            f"1️⃣ Click the JOIN buttons above\n"
+            f"2️⃣ Join all required channels\n"
+            f"3️⃣ Click RELOAD button to verify\n\n"
+            f"<b>📢 Channels to join: {len(not_joined_channels)}</b>"
+        )
+        
+        full_caption = fsub_caption + instruction_text
+        
         await message.reply_photo(
             photo=FORCE_PIC,
-            caption=FORCE_MSG.format(
-                first=message.from_user.first_name,
-                last=message.from_user.last_name if message.from_user.last_name else "",
-                username=f"@{message.from_user.username}" if message.from_user.username else "None",
-                mention=message.from_user.mention,
-                id=message.from_user.id
-            ),
+            caption=full_caption,
             reply_markup=InlineKeyboardMarkup(buttons),
             parse_mode=ParseMode.HTML
         )
-        print(f"✅ FSub panel sent to user {message.from_user.id}")
+        print(f"✅ FSub panel sent successfully to user {message.from_user.id}")
+        
     except Exception as e:
-        print(f"❌ Error sending FSub panel: {e}")
+        print(f"❌ Error sending FSub panel with photo: {e}")
+        import traceback
+        traceback.print_exc()
+        
         # Fallback to text message
-        await message.reply_text(
-            f"<b>⚠️ Please join the following channels to use this bot:</b>\n\n" + 
+        try:
+            await message.reply_text(
+                f"<b>⚠️ Please join the following channels to use this bot:</b>\n\n" + 
+                "\n".join([f"📢 {ch['title']}" for ch in not_joined_channels]) +
+                f"\n\n<b>After joining, click the RELOAD button below.</b>",
+                reply_markup=InlineKeyboardMarkup(buttons),
+                parse_mode=ParseMode.HTML
+            )
+            print(f"✅ FSub panel sent as text (fallback)")
+        except Exception as e2:
+            print(f"❌ Complete failure sending FSub panel: {e2}")
+            await message.reply_text(
+                "⚠️ Error displaying force subscribe panel. Please contact admin.",
+                parse_mode=ParseMode.HTML
+            )
             "\n".join([f"• {ch['title']}" for ch in not_joined_channels]),
             reply_markup=InlineKeyboardMarkup(buttons),
             parse_mode=ParseMode.HTML
