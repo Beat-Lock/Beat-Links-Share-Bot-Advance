@@ -5,6 +5,8 @@ Automatically detects database type from connection string
 """
 
 import asyncio
+import asyncpg
+import os
 from typing import List, Optional
 from datetime import datetime, timedelta
 import base64
@@ -901,4 +903,69 @@ async def is_approval_off(channel_id: int) -> bool:
             return bool(channel and channel.get("approval_off", False))
     except Exception as e:
         print(f"Error checking approval_off for channel {channel_id}: {e}")
+        return False
+async def migrate_database():
+    """Add missing 'mode' column to fsub_channels table"""
+    
+    if not DB_URI:
+        print("❌ Error: DB_URI environment variable not set")
+        return False
+    
+    print("🔧 Starting database migration...")
+    print(f"📊 Database: PostgreSQL (Neon)")
+    
+    try:
+        # Connect to database
+        conn = await asyncpg.connect(DB_URI)
+        print("✅ Connected to database")
+        
+        # Check if mode column exists
+        check_query = """
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name = 'fsub_channels' 
+            AND column_name = 'mode'
+        """
+        
+        result = await conn.fetchval(check_query)
+        
+        if result:
+            print("✅ Column 'mode' already exists in fsub_channels table")
+        else:
+            print("📝 Adding 'mode' column to fsub_channels table...")
+            
+            # Add mode column with default value 'off'
+            alter_query = """
+                ALTER TABLE fsub_channels 
+                ADD COLUMN IF NOT EXISTS mode TEXT DEFAULT 'off'
+            """
+            
+            await conn.execute(alter_query)
+            print("✅ Column 'mode' added successfully")
+        
+        # Verify the column exists now
+        verify_query = """
+            SELECT column_name, data_type, column_default
+            FROM information_schema.columns 
+            WHERE table_name = 'fsub_channels'
+            ORDER BY ordinal_position
+        """
+        
+        columns = await conn.fetch(verify_query)
+        
+        print("\n📋 Current fsub_channels table structure:")
+        print("=" * 60)
+        for col in columns:
+            default = col['column_default'] or 'NULL'
+            print(f"  {col['column_name']:20} | {col['data_type']:15} | {default}")
+        print("=" * 60)
+        
+        await conn.close()
+        print("\n✅ Migration completed successfully!")
+        return True
+        
+    except Exception as e:
+        print(f"\n❌ Error during migration: {e}")
+        import traceback
+        traceback.print_exc()
         return False
