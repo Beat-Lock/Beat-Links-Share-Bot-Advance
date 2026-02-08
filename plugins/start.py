@@ -52,10 +52,14 @@ async def get_fsub_channels_not_joined(client: Client, user_id: int) -> list:
         # Get all FSub channels from database
         fsub_channels = await db.show_channels()
         
+        print(f"📊 FSub check for user {user_id}:")
+        print(f"   Total FSub channels in DB: {len(fsub_channels) if fsub_channels else 0}")
+        
         if not fsub_channels:
-            print("ℹ️ No FSub channels configured")
+            print("ℹ️ No FSub channels configured - allowing access")
             return []
         
+        print(f"📋 FSub channels configured: {fsub_channels}")
         print(f"📋 Checking {len(fsub_channels)} FSub channels for user {user_id}")
         
         for channel_id in fsub_channels:
@@ -78,17 +82,35 @@ async def get_fsub_channels_not_joined(client: Client, user_id: int) -> list:
                             'username': chat.username,
                             'chat': chat
                         })
-                        print(f"❌ User {user_id} NOT joined: {chat.title} ({channel_id})")
+                        print(f"   ❌ User {user_id} NOT joined: {chat.title} ({channel_id})")
                     except Exception as e:
-                        print(f"⚠️ Error getting info for channel {channel_id}: {e}")
+                        print(f"   ⚠️ Error getting info for channel {channel_id}: {e}")
+                        # Still add to not_joined list even if we can't get chat info
+                        not_joined.append({
+                            'id': channel_id,
+                            'title': f"Channel {channel_id}",
+                            'username': None,
+                            'chat': None
+                        })
                 else:
-                    print(f"✅ User {user_id} already joined channel {channel_id}")
+                    print(f"   ✅ User {user_id} already joined channel {channel_id}")
                     
             except Exception as e:
-                print(f"⚠️ Error processing channel {channel_id}: {e}")
-                
+                print(f"   ⚠️ Error processing channel {channel_id}: {e}")
+                # On error, assume user hasn't joined (safer approach)
+                not_joined.append({
+                    'id': channel_id,
+                    'title': f"Channel {channel_id}",
+                    'username': None,
+                    'chat': None
+                })
+        
+        print(f"📊 FSub check result: User needs to join {len(not_joined)} channels")
+        
     except Exception as e:
         print(f"❌ Error in get_fsub_channels_not_joined: {e}")
+        import traceback
+        traceback.print_exc()
     
     return not_joined
 
@@ -100,7 +122,12 @@ async def show_fsub_panel(client: Client, message: Message, not_joined_channels:
     
     for idx, channel_info in enumerate(not_joined_channels, 1):
         channel_id = channel_info['id']
-        chat = channel_info['chat']
+        chat = channel_info.get('chat')
+        
+        # Skip if we don't have chat info
+        if not chat:
+            print(f"  ⚠️ Skipping channel {channel_id} - no chat info available")
+            continue
         
         try:
             print(f"  Processing channel {idx}: {chat.title} ({channel_id})")
@@ -350,13 +377,14 @@ async def start_command(client: Bot, message: Message):
             print(f"   Channels: {[ch['title'] for ch in not_joined_channels]}")
             # PASS the original parameter to the FSub panel
             await show_fsub_panel(client, message, not_joined_channels, original_param)
-            return
+            return  # CRITICAL: Stop here, don't process the start parameter yet
         else:
             print(f"✅ User {user_id} joined all FSub channels (or none configured)")
     except Exception as e:
         print(f"❌ Error checking FSub: {e}")
         import traceback
         traceback.print_exc()
+        # Even on error, continue to be safe (don't block legitimate users)
 
     # ✅ STEP 4: PROCESS START PARAMETER (if any)
     if len(text) > 7:
