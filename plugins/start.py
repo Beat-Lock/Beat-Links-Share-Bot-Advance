@@ -173,29 +173,35 @@ async def show_fsub_panel(client: Client, message: Message, not_joined_channels:
     # Check if we have any buttons
     if not buttons:
         print("⚠️ No buttons were created! Falling back to text message.")
-        await message.reply_text(
-            "<b>⚠️ Please contact admin - FSub channels configured but buttons failed to generate.</b>",
-            parse_mode=ParseMode.HTML
-        )
+        if hasattr(message, 'edit_text'):
+            await message.edit_text(
+                "<b>⚠️ Please contact admin - FSub channels configured but buttons failed to generate.</b>",
+                parse_mode=ParseMode.HTML
+            )
+        else:
+            await message.reply_text(
+                "<b>⚠️ Please contact admin - FSub channels configured but buttons failed to generate.</b>",
+                parse_mode=ParseMode.HTML
+            )
         return
     
-    # Add "Try Again" button - FIXED to preserve original parameter
+    # Add "Try Again" button - Use callback query to re-check subscription
     try:
         if original_param:
-            # Use the original parameter that was passed to /start
-            retry_url = f"https://t.me/{client.username}?start={original_param}"
-            print(f"✅ Reload button will use original parameter: {original_param}")
+            # Store the original parameter in callback data
+            callback_data = f"check_sub_{original_param}"
+            print(f"✅ Reload button will use callback with parameter: {original_param}")
         else:
-            # No parameter, just use /start
-            retry_url = f"https://t.me/{client.username}"
-            print(f"✅ Reload button will use plain /start")
+            # No parameter, just check subscription
+            callback_data = "check_sub"
+            print(f"✅ Reload button will use plain check_sub callback")
         
         # Add reload button after all channel buttons
-        buttons.append([InlineKeyboardButton(text='♻️ Try Again', url=retry_url)])
-        print(f"✅ Reload button added")
+        buttons.append([InlineKeyboardButton(text='♻️ Try Again', callback_data=callback_data)])
+        print(f"✅ Reload button added with callback")
     except Exception as e:
         print(f"⚠️ Error adding reload button: {e}")
-        buttons.append([InlineKeyboardButton(text='♻️ Try Again', url=f"https://t.me/{client.username}")])
+        buttons.append([InlineKeyboardButton(text='♻️ Try Again', callback_data="check_sub")])
     
     print(f"✅ Total buttons created: {len(buttons)}")
     
@@ -212,41 +218,76 @@ async def show_fsub_panel(client: Client, message: Message, not_joined_channels:
         
         # Add instruction text
         instruction_text = (
-            f"ʏᴏᴜ ʜᴀᴠᴇɴᴛ ᴊᴏɪɴ {len(not_joined_channels)}.ᴘʟᴇᴀsᴇ ᴊᴏɪɴ ɪɴ ᴍʏ ᴄʜᴀɴɴᴇʟ/ɢʀᴏᴜᴘ ᴘʀᴏᴠɪᴅᴇᴅ ʙᴇʟᴏᴡ, ᴛʜᴇɴ ᴛʀʏ ᴀɢᴀɪɴ.. ! </b>\n"
+            f"ʏᴏᴜ ʜᴀᴠᴇɴᴛ ᴊᴏɪɴ {len(not_joined_channels)}.ᴘʟᴇᴀsᴇ ᴊᴏɪɴ ɪɴ ᴍʏ ᴄʜᴀɴɴᴇʟ/ɢʀᴏᴜᴘ ᴘʀᴏᴠɪᴅᴇᴅ ʙᴇʟᴏᴡ, ᴛʜᴇɴ ᴛʀʏ ᴀɢᴀɪɴ.. ! </b>\n\n"
             f"<b>❗ғᴀᴄɪɴɢ ᴘʀᴏʙʟᴇᴍs. ᴜsᴇ /help</b>"
         )
         
         full_caption = fsub_caption + instruction_text
         
-        await message.reply_photo(
-            photo=FORCE_PIC,
-            caption=full_caption,
-            reply_markup=InlineKeyboardMarkup(buttons),
-            parse_mode=ParseMode.HTML
-        )
-        print(f"✅ FSub panel sent successfully to user {message.from_user.id}")
+        # Check if this is a callback query (message.edit) or new message (message.reply)
+        if hasattr(message, 'edit_text'):
+            # This is from callback, edit the existing message
+            try:
+                await message.edit_media(
+                    InputMediaPhoto(
+                        media=FORCE_PIC,
+                        caption=full_caption,
+                        parse_mode=ParseMode.HTML
+                    ),
+                    reply_markup=InlineKeyboardMarkup(buttons)
+                )
+                print(f"✅ FSub panel updated (edited)")
+            except:
+                # If edit fails, try edit_text
+                await message.edit_text(
+                    full_caption,
+                    reply_markup=InlineKeyboardMarkup(buttons),
+                    parse_mode=ParseMode.HTML
+                )
+                print(f"✅ FSub panel updated (text only)")
+        else:
+            # This is a new message, reply with photo
+            await message.reply_photo(
+                photo=FORCE_PIC,
+                caption=full_caption,
+                reply_markup=InlineKeyboardMarkup(buttons),
+                parse_mode=ParseMode.HTML
+            )
+            print(f"✅ FSub panel sent successfully")
         
     except Exception as e:
-        print(f"❌ Error sending FSub panel with photo: {e}")
+        print(f"❌ Error sending FSub panel: {e}")
         import traceback
         traceback.print_exc()
         
         # Fallback to text message
         try:
-            await message.reply_text(
+            fallback_text = (
                 f"<b>⚠️ Please join the following channels to use this bot:</b>\n\n" + 
                 "\n".join([f"📢 {ch['title']}" for ch in not_joined_channels]) +
-                f"\n\n<b>After joining, click the RELOAD button below.</b>",
-                reply_markup=InlineKeyboardMarkup(buttons),
-                parse_mode=ParseMode.HTML
+                f"\n\n<b>After joining, click the Try Again button below.</b>"
             )
+            
+            if hasattr(message, 'edit_text'):
+                await message.edit_text(
+                    fallback_text,
+                    reply_markup=InlineKeyboardMarkup(buttons),
+                    parse_mode=ParseMode.HTML
+                )
+            else:
+                await message.reply_text(
+                    fallback_text,
+                    reply_markup=InlineKeyboardMarkup(buttons),
+                    parse_mode=ParseMode.HTML
+                )
             print(f"✅ FSub panel sent as text (fallback)")
         except Exception as e2:
             print(f"❌ Complete failure sending FSub panel: {e2}")
-            await message.reply_text(
-                "⚠️ Error displaying force subscribe panel. Please contact admin.",
-                parse_mode=ParseMode.HTML
-            )
+            error_text = "⚠️ Error displaying force subscribe panel. Please contact admin."
+            if hasattr(message, 'edit_text'):
+                await message.edit_text(error_text, parse_mode=ParseMode.HTML)
+            else:
+                await message.reply_text(error_text, parse_mode=ParseMode.HTML)
 
 async def delete_after_delay(msg, delay):
     """Auto-delete message after delay"""
@@ -486,17 +527,139 @@ async def close_callback(client: Bot, callback_query):
 @Bot.on_callback_query(filters.regex("check_sub"))
 async def check_sub_callback(client: Bot, callback_query: CallbackQuery):
     user_id = callback_query.from_user.id
+    data = callback_query.data
+    
+    print(f"🔄 Check subscription callback from user {user_id}: {data}")
+    
+    # Extract original parameter if present
+    original_param = None
+    if data.startswith("check_sub_"):
+        original_param = data.split("check_sub_", 1)[1]
+        print(f"📝 Original parameter found: {original_param}")
     
     # Re-check subscription
     not_joined = await get_fsub_channels_not_joined(client, user_id)
     
     if not not_joined:
-        await callback_query.message.edit_text(
-            "<b>✅ You are subscribed to all required channels! Use /start to proceed.</b>",
-            parse_mode=ParseMode.HTML
-        )
+        # User has joined all channels
+        print(f"✅ User {user_id} joined all FSub channels")
+        
+        # If there's an original parameter, process it now
+        if original_param:
+            try:
+                print(f"🔗 Processing original parameter: {original_param}")
+                
+                is_request = original_param.startswith("req_")
+                if is_request:
+                    base64_string = original_param[4:]
+                    channel_id = await get_channel_by_encoded_link2(base64_string)
+                else:
+                    channel_id = await get_channel_by_encoded_link(original_param)
+                
+                if not channel_id:
+                    print(f"❌ Invalid encoded link: {original_param}")
+                    await callback_query.answer("Invalid or expired link", show_alert=True)
+                    return await callback_query.message.edit_text(
+                        "<b>✅ You are subscribed to all required channels!\n\n"
+                        "⚠️ However, the original link has expired. Please use /start</b>",
+                        parse_mode=ParseMode.HTML
+                    )
+                
+                print(f"✅ Decoded channel_id: {channel_id}")
+                
+                # Check if this is a /genlink link
+                original_link = await get_original_link(channel_id)
+                if original_link:
+                    print(f"🔗 Providing original link: {original_link}")
+                    button = InlineKeyboardMarkup(
+                        [[InlineKeyboardButton("• Proceed to Link •", url=original_link)]]
+                    )
+                    await callback_query.answer("✅ Access granted!")
+                    return await callback_query.message.edit_text(
+                        "<b><blockquote expandable>ʜᴇʀᴇ ɪs ʏᴏᴜʀ ʟɪɴᴋ! ᴄʟɪᴄᴋ ʙᴇʟᴏᴡ ᴛᴏ ᴘʀᴏᴄᴇᴇᴅ</blockquote></b>",
+                        reply_markup=button,
+                        parse_mode=ParseMode.HTML
+                    )
+                
+                # Generate invite link for the channel
+                async with channel_locks[channel_id]:
+                    old_link_info = await get_current_invite_link(channel_id)
+                    current_time = datetime.now()
+                    
+                    if old_link_info:
+                        link_created_time = await get_link_creation_time(channel_id)
+                        if link_created_time and (current_time - link_created_time).total_seconds() < 240:
+                            invite_link = old_link_info["invite_link"]
+                            is_request_link = old_link_info["is_request"]
+                            print(f"♻️ Reusing existing invite link")
+                        else:
+                            try:
+                                await client.revoke_chat_invite_link(channel_id, old_link_info["invite_link"])
+                                print(f"🗑️ Revoked old link")
+                            except Exception as e:
+                                print(f"⚠️ Failed to revoke old link: {e}")
+                            
+                            invite = await client.create_chat_invite_link(
+                                chat_id=channel_id,
+                                expire_date=current_time + timedelta(minutes=10),
+                                creates_join_request=is_request
+                            )
+                            invite_link = invite.invite_link
+                            is_request_link = is_request
+                            await save_invite_link(channel_id, invite_link, is_request_link)
+                            print(f"✅ Created new link")
+                    else:
+                        invite = await client.create_chat_invite_link(
+                            chat_id=channel_id,
+                            expire_date=current_time + timedelta(minutes=10),
+                            creates_join_request=is_request
+                        )
+                        invite_link = invite.invite_link
+                        is_request_link = is_request
+                        await save_invite_link(channel_id, invite_link, is_request_link)
+                        print(f"✅ Created new link")
+                
+                button_text = "• ʀᴇǫᴜᴇsᴛ ᴛᴏ ᴊᴏɪɴ •" if is_request_link else "• ᴊᴏɪɴ ᴄʜᴀɴɴᴇʟ •"
+                button = InlineKeyboardMarkup([[InlineKeyboardButton(button_text, url=invite_link)]])
+                
+                await callback_query.answer("✅ Access granted!")
+                await callback_query.message.edit_text(
+                    "<b><blockquote expandable>ʜᴇʀᴇ ɪs ʏᴏᴜʀ ʟɪɴᴋ! ᴄʟɪᴄᴋ ʙᴇʟᴏᴡ ᴛᴏ ᴘʀᴏᴄᴇᴇᴅ</blockquote></b>",
+                    reply_markup=button,
+                    parse_mode=ParseMode.HTML
+                )
+                
+                # Send note and schedule revoke
+                note_msg = await callback_query.message.reply_text(
+                    "<u><b>Note: If the link is expired, please click the post link again to get a new one.</b></u>",
+                    parse_mode=ParseMode.HTML
+                )
+                asyncio.create_task(delete_after_delay(note_msg, 300))
+                asyncio.create_task(revoke_invite_after_5_minutes(client, channel_id, invite_link, is_request_link))
+                
+            except Exception as e:
+                print(f"❌ Error processing original parameter: {e}")
+                import traceback
+                traceback.print_exc()
+                await callback_query.answer("Error processing link", show_alert=True)
+                await callback_query.message.edit_text(
+                    "<b>✅ You are subscribed to all required channels!\n\n"
+                    "⚠️ However, there was an error processing your link. Please use /start</b>",
+                    parse_mode=ParseMode.HTML
+                )
+        else:
+            # No original parameter, just show success message
+            await callback_query.answer("✅ You've joined all channels!")
+            await callback_query.message.edit_text(
+                "<b>✅ You are subscribed to all required channels! Use /start to proceed.</b>",
+                parse_mode=ParseMode.HTML
+            )
     else:
-        await show_fsub_panel(client, callback_query.message, not_joined)
+        # User still hasn't joined all channels
+        print(f"❌ User {user_id} still needs to join {len(not_joined)} channel(s)")
+        await callback_query.answer("⚠️ Please join all channels first", show_alert=True)
+        # Refresh the FSub panel with updated channel list
+        await show_fsub_panel(client, callback_query.message, not_joined, original_param)
 
 @Bot.on_message(filters.command('status') & filters.private & is_owner_or_admin)
 async def info(client: Bot, message: Message):   
