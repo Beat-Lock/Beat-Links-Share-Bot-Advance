@@ -64,7 +64,7 @@ FSUB_LINK_EXPIRY = int(os.environ.get("FSUB_LINK_EXPIRY", "300"))  # 5 minutes d
 
 # Force sub picture
 FORCE_PIC = os.environ.get("FORCE_PIC", "https://telegra.ph/file/f3d3aff9ec422158feb05-d2180e3665e0ac4d32.jpg")
-FORCE_MSG = os.environ.get("FORCE_MSG", "<b>ʜᴇʟʟᴏ {first},\n\nʏᴏᴜ ɴᴇᴇᴅ ᴛᴏ ᴊᴏɪɴ ɪɴ ᴍʏ ᴄʜᴀɴɴᴇʟ/ɢʀᴏᴜᴘ ᴛᴏ ᴜsᴇ ᴍᴇ\n\nᴋɪɴᴅʟʏ ᴘʟᴇᴀsᴇ ᴊᴏɪɴ ᴄʜᴀɴɴᴇʟ</b>")
+FORCE_MSG = os.environ.get("FORCE_MSG", f"<blockquote><b>⚠️ʜᴇʏ, {mention}\n</blockquote> ʏᴏᴜ ʜᴀᴠᴇɴᴛ ᴊᴏɪɴ {len(not_joined_channels)}.ᴘʟᴇᴀsᴇ ᴊᴏɪɴ ɪɴ ᴍʏ ᴄʜᴀɴɴᴇʟ/ɢʀᴏᴜᴘ ᴘʀᴏᴠɪᴅᴇᴅ ʙᴇʟᴏᴡ, ᴛʜᴇɴ ᴛʀʏ ᴀɢᴀɪɴ.. ! </b>")
 
 BAN_SUPPORT = os.environ.get("BAN_SUPPORT", "https://t.me/BeatAnime")
 
