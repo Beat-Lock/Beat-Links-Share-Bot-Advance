@@ -148,7 +148,7 @@ async def show_fsub_panel(client: Client, message: Message, not_joined_channels:
                     print(f"    ✅ Invite link created: {link}")
             
             # Add button for this channel - Each channel on its own row for better visibility
-            button_text = f"📢 JOIN {chat.title.upper()}"
+            button_text = f" {chat.title.upper()}"
             buttons.append([InlineKeyboardButton(text=button_text, url=link)])
             print(f"    ✅ Button added: {button_text} -> {link}")
             
@@ -210,7 +210,7 @@ async def show_fsub_panel(client: Client, message: Message, not_joined_channels:
         
         # Add instruction text
         instruction_text = (
-            f"<b>📢 Channels to join: {len(not_joined_channels)}</b>"
+            f"ʏᴏᴜ ʜᴀᴠᴇɴᴛ ᴊᴏɪɴ {len(not_joined_channels)}.ᴘʟᴇᴀsᴇ ᴊᴏɪɴ ɪɴ ᴍʏ ᴄʜᴀɴɴᴇʟ/ɢʀᴏᴜᴘ ᴘʀᴏᴠɪᴅᴇᴅ ʙᴇʟᴏᴡ, ᴛʜᴇɴ ᴛʀʏ ᴀɢᴀɪɴ.. ! </b>"
         )
         
         full_caption = fsub_caption + instruction_text
