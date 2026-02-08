@@ -206,7 +206,7 @@ async def show_fsub_panel(client: Client, message: Message, not_joined_channels:
         
         # Add instruction text
         instruction_text = (
-            f"ʏᴏᴜ ʜᴀᴠᴇɴᴛ ᴊᴏɪɴ 😅{len(not_joined_channels)} ᴄʜᴀɴɴᴇʟ.ᴘʟᴇᴀsᴇ ᴊᴏɪɴ ɪɴ ᴍʏ ᴄʜᴀɴɴᴇʟ/ɢʀᴏᴜᴘ ᴘʀᴏᴠɪᴅᴇᴅ ʙᴇʟᴏᴡ, ᴛʜᴇɴ ᴛʀʏ ᴀɢᴀɪɴ.. ! </b>\n\n"
+            f"ʏᴏᴜ ʜᴀᴠᴇɴᴛ ᴊᴏɪɴ 😅 {len(not_joined_channels)} ᴄʜᴀɴɴᴇʟ.ᴘʟᴇᴀsᴇ ᴊᴏɪɴ ɪɴ ᴍʏ ᴄʜᴀɴɴᴇʟ/ɢʀᴏᴜᴘ ᴘʀᴏᴠɪᴅᴇᴅ ʙᴇʟᴏᴡ, ᴛʜᴇɴ ᴛʀʏ ᴀɢᴀɪɴ.. ! </b>\n\n"
             f"<b>❗ғᴀᴄɪɴɢ ᴘʀᴏʙʟᴇᴍs. ᴜsᴇ /help</b>"
         )
         
@@ -470,7 +470,8 @@ async def start_command(client: Bot, message: Message):
                 photo=START_PIC,
                 caption=START_MSG,
                 reply_markup=inline_buttons,
-                parse_mode=ParseMode.HTML
+                parse_mode=ParseMode.HTML,
+                message_effect_id=5104841245755180586  # 🔥
             )
             print(f"✅ Welcome message sent successfully")
         except Exception as e:
