@@ -30,39 +30,143 @@ is_canceled = False
 # Create a global dictionary to store chat data
 chat_data_cache = {}
 
-async def is_subscribed(client: Client, user_id: int) -> bool:
-    """Check if user is subscribed to all force-sub channels"""
-    try:
-        all_channels = await db.show_channels()
-        if not all_channels:
-            return True
-        
-        for chat_id in all_channels:
-            try:
-                member = await client.get_chat_member(chat_id, user_id)
-                if member.status not in [ChatMemberStatus.MEMBER, ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.OWNER]:
-                    return False
-            except UserNotParticipant:
-                return False
-            except Exception as e:
-                print(f"Error checking subscription for {chat_id}: {e}")
-                return False
-        
-        return True
-    except Exception as e:
-        print(f"Error in is_subscribed: {e}")
-        return True
-
-async def is_sub(client: Client, user_id: int, chat_id: int) -> bool:
-    """Check if user is subscribed to a specific channel"""
+async def is_user_joined_channel(client: Client, user_id: int, chat_id: int) -> bool:
+    """Check if user has joined a specific channel"""
     try:
         member = await client.get_chat_member(chat_id, user_id)
-        return member.status in [ChatMemberStatus.MEMBER, ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.OWNER]
+        if member.status in [ChatMemberStatus.MEMBER, ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.OWNER]:
+            return True
+        return False
     except UserNotParticipant:
         return False
     except Exception as e:
-        print(f"Error checking subscription: {e}")
-        return True
+        print(f"⚠️ Error checking membership for user {user_id} in channel {chat_id}: {e}")
+        # In case of error, assume user hasn't joined to be safe
+        return False
+
+async def get_fsub_channels_not_joined(client: Client, user_id: int) -> list:
+    """Get list of FSub channels the user hasn't joined yet"""
+    not_joined = []
+    
+    try:
+        # Get all FSub channels from database
+        fsub_channels = await db.show_channels()
+        
+        if not fsub_channels:
+            print("ℹ️ No FSub channels configured")
+            return []
+        
+        print(f"📋 Checking {len(fsub_channels)} FSub channels for user {user_id}")
+        
+        for channel_id in fsub_channels:
+            try:
+                # Check if user has joined this channel
+                is_joined = await is_user_joined_channel(client, user_id, channel_id)
+                
+                if not is_joined:
+                    # Get channel info
+                    try:
+                        if channel_id in chat_data_cache:
+                            chat = chat_data_cache[channel_id]
+                        else:
+                            chat = await client.get_chat(channel_id)
+                            chat_data_cache[channel_id] = chat
+                        
+                        not_joined.append({
+                            'id': channel_id,
+                            'title': chat.title,
+                            'username': chat.username,
+                            'chat': chat
+                        })
+                        print(f"❌ User {user_id} NOT joined: {chat.title} ({channel_id})")
+                    except Exception as e:
+                        print(f"⚠️ Error getting info for channel {channel_id}: {e}")
+                else:
+                    print(f"✅ User {user_id} already joined channel {channel_id}")
+                    
+            except Exception as e:
+                print(f"⚠️ Error processing channel {channel_id}: {e}")
+                
+    except Exception as e:
+        print(f"❌ Error in get_fsub_channels_not_joined: {e}")
+    
+    return not_joined
+
+async def show_fsub_panel(client: Client, message: Message, not_joined_channels: list):
+    """Display the Force Subscribe panel with join buttons"""
+    buttons = []
+    
+    for channel_info in not_joined_channels:
+        channel_id = channel_info['id']
+        chat = channel_info['chat']
+        
+        try:
+            # Get channel mode (request link or normal invite)
+            mode = await db.get_channel_mode(channel_id)
+            
+            # Generate invite link
+            if mode == "on" and not chat.username:
+                # Create request link
+                invite = await client.create_chat_invite_link(
+                    chat_id=channel_id,
+                    creates_join_request=True,
+                    expire_date=datetime.utcnow() + timedelta(seconds=FSUB_LINK_EXPIRY) if FSUB_LINK_EXPIRY else None
+                )
+                link = invite.invite_link
+            else:
+                # Create normal invite link or use username
+                if chat.username:
+                    link = f"https://t.me/{chat.username}"
+                else:
+                    invite = await client.create_chat_invite_link(
+                        chat_id=channel_id,
+                        expire_date=datetime.utcnow() + timedelta(seconds=FSUB_LINK_EXPIRY) if FSUB_LINK_EXPIRY else None
+                    )
+                    link = invite.invite_link
+            
+            # Add button for this channel
+            buttons.append([InlineKeyboardButton(text=f"📢 {chat.title}", url=link)])
+            
+        except Exception as e:
+            print(f"❌ Error creating button for channel {channel_id}: {e}")
+    
+    # Add "Try Again" button
+    try:
+        # Try to get the start parameter if available
+        start_param = message.text.split()[1] if len(message.text.split()) > 1 else ""
+        if start_param:
+            retry_url = f"https://t.me/{client.username}?start={start_param}"
+        else:
+            retry_url = f"https://t.me/{client.username}?start=refresh"
+        
+        buttons.append([InlineKeyboardButton(text='♻️ Tʀʏ Aɢᴀɪɴ', url=retry_url)])
+    except:
+        buttons.append([InlineKeyboardButton(text='♻️ Tʀʏ Aɢᴀɪɴ', url=f"https://t.me/{client.username}")])
+    
+    # Send FSub message
+    try:
+        await message.reply_photo(
+            photo=FORCE_PIC,
+            caption=FORCE_MSG.format(
+                first=message.from_user.first_name,
+                last=message.from_user.last_name if message.from_user.last_name else "",
+                username=f"@{message.from_user.username}" if message.from_user.username else "None",
+                mention=message.from_user.mention,
+                id=message.from_user.id
+            ),
+            reply_markup=InlineKeyboardMarkup(buttons),
+            parse_mode=ParseMode.HTML
+        )
+        print(f"✅ FSub panel sent to user {message.from_user.id}")
+    except Exception as e:
+        print(f"❌ Error sending FSub panel: {e}")
+        # Fallback to text message
+        await message.reply_text(
+            f"<b>⚠️ Please join the following channels to use this bot:</b>\n\n" + 
+            "\n".join([f"• {ch['title']}" for ch in not_joined_channels]),
+            reply_markup=InlineKeyboardMarkup(buttons),
+            parse_mode=ParseMode.HTML
+        )
 
 async def delete_after_delay(msg, delay):
     """Auto-delete message after delay"""
@@ -76,30 +180,59 @@ async def delete_after_delay(msg, delay):
 async def start_command(client: Bot, message: Message):
     user_id = message.from_user.id
 
-    # ✅ CHECK IF USER IS BANNED FIRST
-    if await db.ban_user_exist(user_id):
-        return await message.reply_text(
-            f"<b>🚫 Yᴏᴜ ᴀʀᴇ ʙᴀɴɴᴇᴅ ғʀᴏᴍ ᴜsɪɴɢ ᴛʜɪs ʙᴏᴛ!</b>\n\n"
-            f"<b>Cᴏɴᴛᴀᴄᴛ:</b> {BAN_SUPPORT if 'BAN_SUPPORT' in globals() else 'Bot Admin'}",
-            parse_mode=ParseMode.HTML
-        )
+    print(f"\n{'='*50}")
+    print(f"📨 /start command from user {user_id} ({message.from_user.first_name})")
+    print(f"{'='*50}")
+
+    # ✅ STEP 1: CHECK IF USER IS BANNED
+    try:
+        is_banned = await db.ban_user_exist(user_id)
+        if is_banned:
+            print(f"🚫 User {user_id} is BANNED")
+            return await message.reply_text(
+                f"<b>🚫 Yᴏᴜ ᴀʀᴇ ʙᴀɴɴᴇᴅ ғʀᴏᴍ ᴜsɪɴɢ ᴛʜɪs ʙᴏᴛ!</b>\n\n"
+                f"<b>Cᴏɴᴛᴀᴄᴛ:</b> {BAN_SUPPORT if 'BAN_SUPPORT' in globals() else 'Bot Admin'}",
+                parse_mode=ParseMode.HTML
+            )
+    except Exception as e:
+        print(f"⚠️ Error checking ban status: {e}")
 
     # Check if user is temporarily banned (spam protection)
     if user_id in user_banned_until:
         if datetime.now() < user_banned_until[user_id]:
+            print(f"⏳ User {user_id} temporarily banned until {user_banned_until[user_id]}")
             return await message.reply_text(
                 "<b><blockquote expandable>You are temporarily banned from using commands due to spamming. Try again later.</blockquote></b>",
                 parse_mode=ParseMode.HTML
             )
-            
-    await add_user(user_id)
+    
+    # ✅ STEP 2: ADD USER TO DATABASE
+    try:
+        await add_user(user_id)
+        print(f"✅ User {user_id} added/verified in database")
+    except Exception as e:
+        print(f"⚠️ Error adding user to database: {e}")
 
-    # Check Force Subscription
-    if not await is_subscribed(client, user_id):
-        return await not_joined(client, message)
+    # ✅ STEP 3: CHECK FORCE SUBSCRIPTION
+    try:
+        not_joined_channels = await get_fsub_channels_not_joined(client, user_id)
+        
+        if not_joined_channels:
+            print(f"❌ User {user_id} needs to join {len(not_joined_channels)} channel(s)")
+            print(f"   Channels: {[ch['title'] for ch in not_joined_channels]}")
+            await show_fsub_panel(client, message, not_joined_channels)
+            return
+        else:
+            print(f"✅ User {user_id} joined all FSub channels (or none configured)")
+    except Exception as e:
+        print(f"❌ Error checking FSub: {e}")
+        import traceback
+        traceback.print_exc()
 
+    # ✅ STEP 4: PROCESS START PARAMETER (if any)
     text = message.text
     if len(text) > 7:
+        print(f"🔗 Processing start parameter...")
         try:
             base64_string = text.split(" ", 1)[1]
             is_request = base64_string.startswith("req_")
@@ -111,14 +244,18 @@ async def start_command(client: Bot, message: Message):
                 channel_id = await get_channel_by_encoded_link(base64_string)
             
             if not channel_id:
+                print(f"❌ Invalid encoded link: {base64_string}")
                 return await message.reply_text(
                     "<b><blockquote expandable>Invalid or expired invite link.</blockquote></b>",
                     parse_mode=ParseMode.HTML
                 )
 
+            print(f"✅ Decoded channel_id: {channel_id}")
+
             # Check if this is a /genlink link (original_link exists)
             original_link = await get_original_link(channel_id)
             if original_link:
+                print(f"🔗 Providing original link: {original_link}")
                 button = InlineKeyboardMarkup(
                     [[InlineKeyboardButton("• Proceed to Link •", url=original_link)]]
                 )
@@ -141,13 +278,14 @@ async def start_command(client: Bot, message: Message):
                         # Use existing link
                         invite_link = old_link_info["invite_link"]
                         is_request_link = old_link_info["is_request"]
+                        print(f"♻️ Reusing existing invite link")
                     else:
                         # Revoke old link and create new one
                         try:
                             await client.revoke_chat_invite_link(channel_id, old_link_info["invite_link"])
-                            print(f"Revoked old {'request' if old_link_info['is_request'] else 'invite'} link for channel {channel_id}")
+                            print(f"🗑️ Revoked old {'request' if old_link_info['is_request'] else 'invite'} link")
                         except Exception as e:
-                            print(f"Failed to revoke old link for channel {channel_id}: {e}")
+                            print(f"⚠️ Failed to revoke old link: {e}")
                         
                         # Create new link
                         invite = await client.create_chat_invite_link(
@@ -158,6 +296,7 @@ async def start_command(client: Bot, message: Message):
                         invite_link = invite.invite_link
                         is_request_link = is_request
                         await save_invite_link(channel_id, invite_link, is_request_link)
+                        print(f"✅ Created new {'request' if is_request else 'invite'} link")
                 else:
                     # Create new link
                     invite = await client.create_chat_invite_link(
@@ -168,15 +307,12 @@ async def start_command(client: Bot, message: Message):
                     invite_link = invite.invite_link
                     is_request_link = is_request
                     await save_invite_link(channel_id, invite_link, is_request_link)
+                    print(f"✅ Created new {'request' if is_request else 'invite'} link")
 
             button_text = "• ʀᴇǫᴜᴇsᴛ ᴛᴏ ᴊᴏɪɴ •" if is_request_link else "• ᴊᴏɪɴ ᴄʜᴀɴɴᴇʟ •"
             button = InlineKeyboardMarkup([[InlineKeyboardButton(button_text, url=invite_link)]])
 
-            wait_msg = await message.reply_text(
-                "⏳",
-                parse_mode=ParseMode.HTML
-            )
-            
+            wait_msg = await message.reply_text("⏳", parse_mode=ParseMode.HTML)
             await wait_msg.delete()
             
             await message.reply_text(
@@ -192,16 +328,19 @@ async def start_command(client: Bot, message: Message):
 
             # Auto-delete the note message after 5 minutes
             asyncio.create_task(delete_after_delay(note_msg, 300))
-
             asyncio.create_task(revoke_invite_after_5_minutes(client, channel_id, invite_link, is_request_link))
 
         except Exception as e:
+            print(f"❌ Error processing start parameter: {e}")
+            import traceback
+            traceback.print_exc()
             await message.reply_text(
                 "<b><blockquote expandable>Invalid or expired invite link.</blockquote></b>",
                 parse_mode=ParseMode.HTML
             )
-            print(f"Decoding error: {e}")
     else:
+        # ✅ STEP 5: SEND WELCOME MESSAGE
+        print(f"📬 Sending welcome message to user {user_id}")
         inline_buttons = InlineKeyboardMarkup(
             [
                 [InlineKeyboardButton("• ᴀʙᴏᴜᴛ", callback_data="about"),
@@ -210,11 +349,6 @@ async def start_command(client: Bot, message: Message):
             ]
         )
         
-        # Show waiting emoji and instantly delete it
-        wait_msg = await message.reply_text("⏳")
-        await asyncio.sleep(0.1)
-        await wait_msg.delete()
-        
         try:
             await message.reply_photo(
                 photo=START_PIC,
@@ -222,8 +356,9 @@ async def start_command(client: Bot, message: Message):
                 reply_markup=inline_buttons,
                 parse_mode=ParseMode.HTML
             )
+            print(f"✅ Welcome message sent successfully")
         except Exception as e:
-            print(f"Error sending start picture: {e}")
+            print(f"⚠️ Error sending photo, trying text: {e}")
             await message.reply_text(
                 START_MSG,
                 reply_markup=inline_buttons,
@@ -252,114 +387,29 @@ async def get_link_creation_time(channel_id):
         print(f"Error fetching link creation time for channel {channel_id}: {e}")
         return None
 
-async def not_joined(client: Client, message: Message):
-    """Handle users who haven't joined required channels"""
-    user_id = message.from_user.id
-    buttons = []
-    count = 0
-
-    try:
-        all_channels = await db.show_channels()
-        
-        # If no FSub channels configured, allow user to proceed
-        if not all_channels:
-            print("No FSub channels configured, allowing user to proceed")
-            return False
-        
-        for total, chat_id in enumerate(all_channels, start=1):
-            mode = await db.get_channel_mode(chat_id)
-
-            await message.reply_chat_action(ChatAction.TYPING)
-
-            if not await is_sub(client, user_id, chat_id):
-                try:
-                    # Cache chat info
-                    if chat_id in chat_data_cache:
-                        data = chat_data_cache[chat_id]
-                    else:
-                        data = await client.get_chat(chat_id)
-                        chat_data_cache[chat_id] = data
-
-                    name = data.title
-
-                    # Generate proper invite link based on the mode
-                    if mode == "on" and not data.username:
-                        invite = await client.create_chat_invite_link(
-                            chat_id=chat_id,
-                            creates_join_request=True,
-                            expire_date=datetime.utcnow() + timedelta(seconds=FSUB_LINK_EXPIRY) if FSUB_LINK_EXPIRY else None
-                        )
-                        link = invite.invite_link
-                    else:
-                        if data.username:
-                            link = f"https://t.me/{data.username}"
-                        else:
-                            invite = await client.create_chat_invite_link(
-                                chat_id=chat_id,
-                                expire_date=datetime.utcnow() + timedelta(seconds=FSUB_LINK_EXPIRY) if FSUB_LINK_EXPIRY else None
-                            )
-                            link = invite.invite_link
-
-                    buttons.append([InlineKeyboardButton(text=name, url=link)])
-                    count += 1
-
-                except Exception as e:
-                    print(f"Error with chat {chat_id}: {e}")
-
-        # If no buttons (user joined all), return False
-        if not buttons:
-            return False
-
-        # Retry Button
-        try:
-            buttons.append([
-                InlineKeyboardButton(
-                    text='♻️ Tʀʏ Aɢᴀɪɴ',
-                    url=f"https://t.me/{client.username}?start={message.command[1]}"
-                )
-            ])
-        except IndexError:
-            buttons.append([
-                InlineKeyboardButton(
-                    text='♻️ Tʀʏ Aɢᴀɪɴ',
-                    url=f"https://t.me/{client.username}?start=refresh"
-                )
-            ])
-
-        await message.reply_photo(
-            photo=FORCE_PIC,
-            caption=FORCE_MSG.format(
-                first=message.from_user.first_name,
-                last=message.from_user.last_name,
-                username=None if not message.from_user.username else '@' + message.from_user.username,
-                mention=message.from_user.mention,
-                id=message.from_user.id
-            ),
-            reply_markup=InlineKeyboardMarkup(buttons),
-        )
-        return True
-
-    except Exception as e:
-        print(f"Final Error in not_joined: {e}")
-        return False
-
 @Bot.on_callback_query(filters.regex("close"))
 async def close_callback(client: Bot, callback_query):
     await callback_query.answer()
     await callback_query.message.delete()
+    try:
+        await callback_query.message.reply_to_message.delete()
+    except:
+        pass
 
 @Bot.on_callback_query(filters.regex("check_sub"))
 async def check_sub_callback(client: Bot, callback_query: CallbackQuery):
     user_id = callback_query.from_user.id
     
     # Re-check subscription
-    if await is_subscribed(client, user_id):
+    not_joined = await get_fsub_channels_not_joined(client, user_id)
+    
+    if not not_joined:
         await callback_query.message.edit_text(
-            "<b>You are subscribed to all required channels! Use /start to proceed.</b>",
+            "<b>✅ You are subscribed to all required channels! Use /start to proceed.</b>",
             parse_mode=ParseMode.HTML
         )
     else:
-        await not_joined(client, callback_query.message)
+        await show_fsub_panel(client, callback_query.message, not_joined)
 
 @Bot.on_message(filters.command('status') & filters.private & is_owner_or_admin)
 async def info(client: Bot, message: Message):   
