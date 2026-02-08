@@ -30,9 +30,6 @@ is_canceled = False
 # Create a global dictionary to store chat data
 chat_data_cache = {}
 
-# Store original start parameters for users (for Try Again functionality)
-user_start_params = {}
-
 async def is_user_joined_channel(client: Client, user_id: int, chat_id: int) -> bool:
     """Check if user has joined a specific channel"""
     try:
@@ -95,7 +92,7 @@ async def get_fsub_channels_not_joined(client: Client, user_id: int) -> list:
     
     return not_joined
 
-async def show_fsub_panel(client: Client, message: Message, not_joined_channels: list, user_id: int):
+async def show_fsub_panel(client: Client, message: Message, not_joined_channels: list, original_start_param: str = None):
     """Display the Force Subscribe panel with join buttons"""
     buttons = []
     
@@ -182,9 +179,20 @@ async def show_fsub_panel(client: Client, message: Message, not_joined_channels:
         )
         return
     
-    # Add "Try Again" button as callback button (not URL button)
-    buttons.append([InlineKeyboardButton(text='♻️ Try Again', callback_data=f"retry_fsub_{user_id}")])
-    print(f"✅ Try Again callback button added")
+    # Add "Try Again" button - Make it prominent and preserve original parameter
+    try:
+        # Use the original start parameter if available, otherwise use "refresh"
+        if original_start_param:
+            retry_url = f"https://t.me/{client.username}?start={original_start_param}"
+        else:
+            retry_url = f"https://t.me/{client.username}?start=refresh"
+        
+        # Add reload button after all channel buttons
+        buttons.append([InlineKeyboardButton(text='♻️ Try Again', url=retry_url)])
+        print(f"✅ Reload button added with URL: {retry_url}")
+    except Exception as e:
+        print(f"⚠️ Error adding reload button: {e}")
+        buttons.append([InlineKeyboardButton(text='♻️ Try Again', url=f"https://t.me/{client.username}?start=refresh")])
     
     print(f"✅ Total buttons created: {len(buttons)}")
     
@@ -245,114 +253,6 @@ async def delete_after_delay(msg, delay):
     except:
         pass
 
-async def process_channel_link(client: Bot, message: Message, user_id: int, start_param: str):
-    """Process channel link and provide invite link"""
-    try:
-        base64_string = start_param
-        is_request = base64_string.startswith("req_")
-        
-        if is_request:
-            base64_string = base64_string[4:]
-            channel_id = await get_channel_by_encoded_link2(base64_string)
-        else:
-            channel_id = await get_channel_by_encoded_link(base64_string)
-        
-        if not channel_id:
-            print(f"❌ Invalid encoded link: {base64_string}")
-            return await message.reply_text(
-                "<b><blockquote expandable>Invalid or expired invite link.</blockquote></b>",
-                parse_mode=ParseMode.HTML
-            )
-
-        print(f"✅ Decoded channel_id: {channel_id}")
-
-        # Check if this is a /genlink link (original_link exists)
-        original_link = await get_original_link(channel_id)
-        if original_link:
-            print(f"🔗 Providing original link: {original_link}")
-            button = InlineKeyboardMarkup(
-                [[InlineKeyboardButton("• Proceed to Link •", url=original_link)]]
-            )
-            return await message.reply_text(
-                "<b><blockquote expandable>ʜᴇʀᴇ ɪs ʏᴏᴜʀ ʟɪɴᴋ! ᴄʟɪᴄᴋ ʙᴇʟᴏᴡ ᴛᴏ ᴘʀᴏᴄᴇᴇᴅ</blockquote></b>",
-                reply_markup=button,
-                parse_mode=ParseMode.HTML
-            )
-
-        # Use a lock for this channel to prevent concurrent link generation
-        async with channel_locks[channel_id]:
-            # Check if we already have a valid link
-            old_link_info = await get_current_invite_link(channel_id)
-            current_time = datetime.now()
-            
-            # If we have an existing link and it's not expired yet (assuming 5 minutes validity)
-            if old_link_info:
-                link_created_time = await get_link_creation_time(channel_id)
-                if link_created_time and (current_time - link_created_time).total_seconds() < 240:  # 4 minutes
-                    # Use existing link
-                    invite_link = old_link_info["invite_link"]
-                    is_request_link = old_link_info["is_request"]
-                    print(f"♻️ Reusing existing invite link")
-                else:
-                    # Revoke old link and create new one
-                    try:
-                        await client.revoke_chat_invite_link(channel_id, old_link_info["invite_link"])
-                        print(f"🗑️ Revoked old {'request' if old_link_info['is_request'] else 'invite'} link")
-                    except Exception as e:
-                        print(f"⚠️ Failed to revoke old link: {e}")
-                    
-                    # Create new link
-                    invite = await client.create_chat_invite_link(
-                        chat_id=channel_id,
-                        expire_date=current_time + timedelta(minutes=10),
-                        creates_join_request=is_request
-                    )
-                    invite_link = invite.invite_link
-                    is_request_link = is_request
-                    await save_invite_link(channel_id, invite_link, is_request_link)
-                    print(f"✅ Created new {'request' if is_request else 'invite'} link")
-            else:
-                # Create new link
-                invite = await client.create_chat_invite_link(
-                    chat_id=channel_id,
-                    expire_date=current_time + timedelta(minutes=10),
-                    creates_join_request=is_request
-                )
-                invite_link = invite.invite_link
-                is_request_link = is_request
-                await save_invite_link(channel_id, invite_link, is_request_link)
-                print(f"✅ Created new {'request' if is_request else 'invite'} link")
-
-        button_text = "• ʀᴇǫᴜᴇsᴛ ᴛᴏ ᴊᴏɪɴ •" if is_request_link else "• ᴊᴏɪɴ ᴄʜᴀɴɴᴇʟ •"
-        button = InlineKeyboardMarkup([[InlineKeyboardButton(button_text, url=invite_link)]])
-
-        wait_msg = await message.reply_text("⏳", parse_mode=ParseMode.HTML)
-        await wait_msg.delete()
-        
-        await message.reply_text(
-            "<b><blockquote expandable>ʜᴇʀᴇ ɪs ʏᴏᴜʀ ʟɪɴᴋ! ᴄʟɪᴄᴋ ʙᴇʟᴏᴡ ᴛᴏ ᴘʀᴏᴄᴇᴇᴅ</blockquote></b>",
-            reply_markup=button,
-            parse_mode=ParseMode.HTML
-        )
-
-        note_msg = await message.reply_text(
-            "<u><b>Note: If the link is expired, please click the post link again to get a new one.</b></u>",
-            parse_mode=ParseMode.HTML
-        )
-
-        # Auto-delete the note message after 5 minutes
-        asyncio.create_task(delete_after_delay(note_msg, 300))
-        asyncio.create_task(revoke_invite_after_5_minutes(client, channel_id, invite_link, is_request_link))
-
-    except Exception as e:
-        print(f"❌ Error processing channel link: {e}")
-        import traceback
-        traceback.print_exc()
-        await message.reply_text(
-            "<b><blockquote expandable>Invalid or expired invite link.</blockquote></b>",
-            parse_mode=ParseMode.HTML
-        )
-
 @Bot.on_message(filters.command('start') & filters.private)
 async def start_command(client: Bot, message: Message):
     user_id = message.from_user.id
@@ -399,10 +299,6 @@ async def start_command(client: Bot, message: Message):
         start_param = text.split(" ", 1)[1]
         is_refresh = start_param == "refresh"
         print(f"🔗 Start parameter detected: {start_param} (is_refresh: {is_refresh})")
-        
-        # Store the start parameter for this user (for Try Again functionality)
-        if not is_refresh:
-            user_start_params[user_id] = start_param
 
     # ✅ STEP 4: CHECK FORCE SUBSCRIPTION
     try:
@@ -411,8 +307,8 @@ async def start_command(client: Bot, message: Message):
         if not_joined_channels:
             print(f"❌ User {user_id} needs to join {len(not_joined_channels)} channel(s)")
             print(f"   Channels: {[ch['title'] for ch in not_joined_channels]}")
-            # Show FSub panel
-            await show_fsub_panel(client, message, not_joined_channels, user_id)
+            # Pass the original start parameter to FSub panel so it can be preserved
+            await show_fsub_panel(client, message, not_joined_channels, start_param if not is_refresh else None)
             return
         else:
             print(f"✅ User {user_id} joined all FSub channels (or none configured)")
@@ -424,7 +320,111 @@ async def start_command(client: Bot, message: Message):
     # ✅ STEP 5: PROCESS START PARAMETER (if any and not refresh)
     if start_param and not is_refresh:
         print(f"🔗 Processing start parameter...")
-        await process_channel_link(client, message, user_id, start_param)
+        try:
+            base64_string = start_param
+            is_request = base64_string.startswith("req_")
+            
+            if is_request:
+                base64_string = base64_string[4:]
+                channel_id = await get_channel_by_encoded_link2(base64_string)
+            else:
+                channel_id = await get_channel_by_encoded_link(base64_string)
+            
+            if not channel_id:
+                print(f"❌ Invalid encoded link: {base64_string}")
+                return await message.reply_text(
+                    "<b><blockquote expandable>Invalid or expired invite link.</blockquote></b>",
+                    parse_mode=ParseMode.HTML
+                )
+
+            print(f"✅ Decoded channel_id: {channel_id}")
+
+            # Check if this is a /genlink link (original_link exists)
+            original_link = await get_original_link(channel_id)
+            if original_link:
+                print(f"🔗 Providing original link: {original_link}")
+                button = InlineKeyboardMarkup(
+                    [[InlineKeyboardButton("• Proceed to Link •", url=original_link)]]
+                )
+                return await message.reply_text(
+                    "<b><blockquote expandable>ʜᴇʀᴇ ɪs ʏᴏᴜʀ ʟɪɴᴋ! ᴄʟɪᴄᴋ ʙᴇʟᴏᴡ ᴛᴏ ᴘʀᴏᴄᴇᴇᴅ</blockquote></b>",
+                    reply_markup=button,
+                    parse_mode=ParseMode.HTML
+                )
+
+            # Use a lock for this channel to prevent concurrent link generation
+            async with channel_locks[channel_id]:
+                # Check if we already have a valid link
+                old_link_info = await get_current_invite_link(channel_id)
+                current_time = datetime.now()
+                
+                # If we have an existing link and it's not expired yet (assuming 5 minutes validity)
+                if old_link_info:
+                    link_created_time = await get_link_creation_time(channel_id)
+                    if link_created_time and (current_time - link_created_time).total_seconds() < 240:  # 4 minutes
+                        # Use existing link
+                        invite_link = old_link_info["invite_link"]
+                        is_request_link = old_link_info["is_request"]
+                        print(f"♻️ Reusing existing invite link")
+                    else:
+                        # Revoke old link and create new one
+                        try:
+                            await client.revoke_chat_invite_link(channel_id, old_link_info["invite_link"])
+                            print(f"🗑️ Revoked old {'request' if old_link_info['is_request'] else 'invite'} link")
+                        except Exception as e:
+                            print(f"⚠️ Failed to revoke old link: {e}")
+                        
+                        # Create new link
+                        invite = await client.create_chat_invite_link(
+                            chat_id=channel_id,
+                            expire_date=current_time + timedelta(minutes=10),
+                            creates_join_request=is_request
+                        )
+                        invite_link = invite.invite_link
+                        is_request_link = is_request
+                        await save_invite_link(channel_id, invite_link, is_request_link)
+                        print(f"✅ Created new {'request' if is_request else 'invite'} link")
+                else:
+                    # Create new link
+                    invite = await client.create_chat_invite_link(
+                        chat_id=channel_id,
+                        expire_date=current_time + timedelta(minutes=10),
+                        creates_join_request=is_request
+                    )
+                    invite_link = invite.invite_link
+                    is_request_link = is_request
+                    await save_invite_link(channel_id, invite_link, is_request_link)
+                    print(f"✅ Created new {'request' if is_request else 'invite'} link")
+
+            button_text = "• ʀᴇǫᴜᴇsᴛ ᴛᴏ ᴊᴏɪɴ •" if is_request_link else "• ᴊᴏɪɴ ᴄʜᴀɴɴᴇʟ •"
+            button = InlineKeyboardMarkup([[InlineKeyboardButton(button_text, url=invite_link)]])
+
+            wait_msg = await message.reply_text("⏳", parse_mode=ParseMode.HTML)
+            await wait_msg.delete()
+            
+            await message.reply_text(
+                "<b><blockquote expandable>ʜᴇʀᴇ ɪs ʏᴏᴜʀ ʟɪɴᴋ! ᴄʟɪᴄᴋ ʙᴇʟᴏᴡ ᴛᴏ ᴘʀᴏᴄᴇᴇᴅ</blockquote></b>",
+                reply_markup=button,
+                parse_mode=ParseMode.HTML
+            )
+
+            note_msg = await message.reply_text(
+                "<u><b>Note: If the link is expired, please click the post link again to get a new one.</b></u>",
+                parse_mode=ParseMode.HTML
+            )
+
+            # Auto-delete the note message after 5 minutes
+            asyncio.create_task(delete_after_delay(note_msg, 300))
+            asyncio.create_task(revoke_invite_after_5_minutes(client, channel_id, invite_link, is_request_link))
+
+        except Exception as e:
+            print(f"❌ Error processing start parameter: {e}")
+            import traceback
+            traceback.print_exc()
+            await message.reply_text(
+                "<b><blockquote expandable>Invalid or expired invite link.</blockquote></b>",
+                parse_mode=ParseMode.HTML
+            )
     else:
         # ✅ STEP 6: SEND WELCOME MESSAGE (no start parameter or just refresh)
         print(f"📬 Sending welcome message to user {user_id}")
@@ -483,77 +483,6 @@ async def close_callback(client: Bot, callback_query):
     except:
         pass
 
-@Bot.on_callback_query(filters.regex(r"^retry_fsub_"))
-async def retry_fsub_callback(client: Bot, callback_query: CallbackQuery):
-    """Handle Try Again button click from FSub panel"""
-    user_id = callback_query.from_user.id
-    
-    print(f"🔄 User {user_id} clicked Try Again")
-    
-    # Delete the old FSub panel message
-    try:
-        await callback_query.message.delete()
-        print(f"🗑️ Deleted old FSub panel for user {user_id}")
-    except Exception as e:
-        print(f"⚠️ Failed to delete old FSub panel: {e}")
-    
-    # Re-check subscription
-    not_joined = await get_fsub_channels_not_joined(client, user_id)
-    
-    if not not_joined:
-        # User has joined all channels
-        print(f"✅ User {user_id} joined all FSub channels")
-        
-        # Check if user has a stored start parameter
-        start_param = user_start_params.get(user_id)
-        
-        if start_param:
-            # Create a fake message object to process the channel link
-            class FakeMessage:
-                def __init__(self, user, client):
-                    self.from_user = user
-                    self.chat = user
-                    
-                async def reply_text(self, text, **kwargs):
-                    return await client.send_message(user.id, text, **kwargs)
-                
-                async def reply_photo(self, photo, **kwargs):
-                    return await client.send_photo(user.id, photo, **kwargs)
-            
-            fake_msg = FakeMessage(callback_query.from_user, client)
-            await process_channel_link(client, fake_msg, user_id, start_param)
-            
-            # Clear the stored parameter
-            if user_id in user_start_params:
-                del user_start_params[user_id]
-        else:
-            # No start parameter, send success message
-            await client.send_message(
-                user_id,
-                "<b>✅ You are subscribed to all required channels! Use /start to proceed.</b>",
-                parse_mode=ParseMode.HTML
-            )
-    else:
-        # User still hasn't joined all channels - show FSub panel again
-        print(f"❌ User {user_id} still needs to join {len(not_joined)} channel(s)")
-        
-        # Create a fake message object
-        class FakeMessage:
-            def __init__(self, user, client):
-                self.from_user = user
-                self.chat = user
-                
-            async def reply_text(self, text, **kwargs):
-                return await client.send_message(user.id, text, **kwargs)
-            
-            async def reply_photo(self, photo, **kwargs):
-                return await client.send_photo(user.id, photo, **kwargs)
-        
-        fake_msg = FakeMessage(callback_query.from_user, client)
-        await show_fsub_panel(client, fake_msg, not_joined, user_id)
-    
-    await callback_query.answer()
-
 @Bot.on_callback_query(filters.regex("check_sub"))
 async def check_sub_callback(client: Bot, callback_query: CallbackQuery):
     user_id = callback_query.from_user.id
@@ -567,20 +496,7 @@ async def check_sub_callback(client: Bot, callback_query: CallbackQuery):
             parse_mode=ParseMode.HTML
         )
     else:
-        # Create a fake message object
-        class FakeMessage:
-            def __init__(self, user, client):
-                self.from_user = user
-                self.chat = user
-                
-            async def reply_text(self, text, **kwargs):
-                return await client.send_message(user.id, text, **kwargs)
-            
-            async def reply_photo(self, photo, **kwargs):
-                return await client.send_photo(user.id, photo, **kwargs)
-        
-        fake_msg = FakeMessage(callback_query.from_user, client)
-        await show_fsub_panel(client, fake_msg, not_joined, user_id)
+        await show_fsub_panel(client, callback_query.message, not_joined)
 
 @Bot.on_message(filters.command('status') & filters.private & is_owner_or_admin)
 async def info(client: Bot, message: Message):   
