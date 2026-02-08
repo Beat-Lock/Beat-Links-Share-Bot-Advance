@@ -78,7 +78,7 @@ if IS_POSTGRES:
                 )
             ''')
             
-            # FSub channels table
+            # FSub channels table - WITH MODE COLUMN
             await conn.execute('''
                 CREATE TABLE IF NOT EXISTS fsub_channels (
                     channel_id BIGINT PRIMARY KEY,
@@ -229,8 +229,8 @@ class Database:
             async with get_connection() as conn:
                 try:
                     await conn.execute(
-                        'INSERT INTO fsub_channels (channel_id) VALUES ($1)',
-                        channel_id
+                        'INSERT INTO fsub_channels (channel_id, mode) VALUES ($1, $2)',
+                        channel_id, 'off'
                     )
                 except asyncpg.UniqueViolationError:
                     pass
@@ -789,8 +789,8 @@ async def add_fsub_channel(channel_id: int) -> bool:
             async with get_connection() as conn:
                 try:
                     await conn.execute(
-                        'INSERT INTO fsub_channels (channel_id, status, created_at) VALUES ($1, $2, $3)',
-                        channel_id, 'active', datetime.utcnow()
+                        'INSERT INTO fsub_channels (channel_id, mode, status, created_at) VALUES ($1, $2, $3, $4)',
+                        channel_id, 'off', 'active', datetime.utcnow()
                     )
                     return True
                 except asyncpg.UniqueViolationError:
@@ -801,6 +801,7 @@ async def add_fsub_channel(channel_id: int) -> bool:
                 return False
             await fsub_channels_collection.insert_one({
                 'channel_id': channel_id,
+                'mode': 'off',
                 'created_at': datetime.utcnow(),
                 'status': 'active'
             })
@@ -904,6 +905,7 @@ async def is_approval_off(channel_id: int) -> bool:
     except Exception as e:
         print(f"Error checking approval_off for channel {channel_id}: {e}")
         return False
+
 async def migrate_database():
     """Add missing 'mode' column to fsub_channels table"""
     
