@@ -105,49 +105,70 @@ async def show_fsub_panel(client: Client, message: Message, not_joined_channels:
         try:
             print(f"  Processing channel {idx}: {chat.title} ({channel_id})")
             
-            # Get channel mode (request link or normal invite)
-            mode = await db.get_channel_mode(channel_id)
-            print(f"    Mode: {mode}")
+            # Get channel mode (request link or normal invite) with error handling
+            try:
+                mode = await db.get_channel_mode(channel_id)
+                print(f"    Mode: {mode}")
+            except Exception as mode_error:
+                print(f"    ⚠️ Error getting mode, using 'off' as default: {mode_error}")
+                mode = "off"
             
-            # Generate invite link
+            # Generate invite link for the ACTUAL CHANNEL, not the bot
             if mode == "on" and not chat.username:
-                # Create request link
-                print(f"    Creating request link...")
-                invite = await client.create_chat_invite_link(
-                    chat_id=channel_id,
-                    creates_join_request=True,
-                    expire_date=datetime.utcnow() + timedelta(seconds=FSUB_LINK_EXPIRY) if FSUB_LINK_EXPIRY else None
-                )
-                link = invite.invite_link
-                print(f"    ✅ Request link created")
-            else:
-                # Create normal invite link or use username
-                if chat.username:
-                    link = f"https://t.me/{chat.username}"
-                    print(f"    ✅ Using public link: @{chat.username}")
-                else:
-                    print(f"    Creating invite link...")
+                # Create request link for the CHANNEL
+                print(f"    Creating request link for channel...")
+                try:
+                    invite = await client.create_chat_invite_link(
+                        chat_id=channel_id,
+                        creates_join_request=True,
+                        expire_date=datetime.utcnow() + timedelta(seconds=FSUB_LINK_EXPIRY) if FSUB_LINK_EXPIRY else None
+                    )
+                    link = invite.invite_link
+                    print(f"    ✅ Request link created: {link}")
+                except Exception as e:
+                    print(f"    ⚠️ Failed to create request link, falling back to normal invite: {e}")
+                    # Fall back to normal invite
                     invite = await client.create_chat_invite_link(
                         chat_id=channel_id,
                         expire_date=datetime.utcnow() + timedelta(seconds=FSUB_LINK_EXPIRY) if FSUB_LINK_EXPIRY else None
                     )
                     link = invite.invite_link
-                    print(f"    ✅ Invite link created")
+            else:
+                # Create normal invite link or use username for the CHANNEL
+                if chat.username:
+                    link = f"https://t.me/{chat.username}"
+                    print(f"    ✅ Using public channel link: @{chat.username}")
+                else:
+                    print(f"    Creating invite link for channel...")
+                    invite = await client.create_chat_invite_link(
+                        chat_id=channel_id,
+                        expire_date=datetime.utcnow() + timedelta(seconds=FSUB_LINK_EXPIRY) if FSUB_LINK_EXPIRY else None
+                    )
+                    link = invite.invite_link
+                    print(f"    ✅ Invite link created: {link}")
             
             # Add button for this channel - Each channel on its own row for better visibility
             button_text = f"📢 JOIN {chat.title.upper()}"
             buttons.append([InlineKeyboardButton(text=button_text, url=link)])
-            print(f"    ✅ Button added: {button_text}")
+            print(f"    ✅ Button added: {button_text} -> {link}")
             
         except Exception as e:
             print(f"    ❌ Error creating button for channel {channel_id}: {e}")
             import traceback
             traceback.print_exc()
-            # Add error button to inform user
-            buttons.append([InlineKeyboardButton(
-                text=f"⚠️ Error: {chat.title}", 
-                url=f"https://t.me/{client.username}"
-            )])
+            # Try to add a basic link if possible
+            try:
+                if chat.username:
+                    link = f"https://t.me/{chat.username}"
+                    buttons.append([InlineKeyboardButton(
+                        text=f"📢 JOIN {chat.title.upper()}", 
+                        url=link
+                    )])
+                else:
+                    # Can't create button without proper link
+                    print(f"    ⚠️ Skipping channel {chat.title} - no username and invite failed")
+            except:
+                pass
     
     # Check if we have any buttons
     if not buttons:
@@ -721,7 +742,10 @@ async def cb_handler(client: Bot, query: CallbackQuery):
         cid = int(data.split("_")[2])
         try:
             chat = await client.get_chat(cid)
-            mode = await db.get_channel_mode(cid)
+            try:
+                mode = await db.get_channel_mode(cid)
+            except:
+                mode = "off"
             status = "🟢 ᴏɴ" if mode == "on" else "🔴 ᴏғғ"
             new_mode = "ᴏғғ" if mode == "on" else "on"
             buttons = [
@@ -762,7 +786,10 @@ async def cb_handler(client: Bot, query: CallbackQuery):
         for cid in channels:
             try:
                 chat = await client.get_chat(cid)
-                mode = await db.get_channel_mode(cid)
+                try:
+                    mode = await db.get_channel_mode(cid)
+                except:
+                    mode = "off"
                 status = "🟢" if mode == "on" else "🔴"
                 buttons.append([InlineKeyboardButton(f"{status} {chat.title}", callback_data=f"rfs_ch_{cid}")])
             except:
