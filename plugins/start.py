@@ -161,7 +161,7 @@ async def show_fsub_panel(client: Client, message: Message, not_joined_channels:
                 if chat.username:
                     link = f"https://t.me/{chat.username}"
                     buttons.append([InlineKeyboardButton(
-                        text=f"📢 JOIN {chat.title.upper()}", 
+                        text=f" {chat.title.upper()}", 
                         url=link
                     )])
                 else:
@@ -189,11 +189,11 @@ async def show_fsub_panel(client: Client, message: Message, not_joined_channels:
             retry_url = f"https://t.me/{client.username}?start=refresh"
         
         # Add reload button after all channel buttons
-        buttons.append([InlineKeyboardButton(text='🔄 RELOAD / CHECK STATUS', url=retry_url)])
+        buttons.append([InlineKeyboardButton(text='♻️ Try Again', url=retry_url)])
         print(f"✅ Reload button added")
     except Exception as e:
         print(f"⚠️ Error adding reload button: {e}")
-        buttons.append([InlineKeyboardButton(text='🔄 RELOAD', url=f"https://t.me/{client.username}")])
+        buttons.append([InlineKeyboardButton(text='♻️ Try Again ', url=f"https://t.me/{client.username}")])
     
     print(f"✅ Total buttons created: {len(buttons)}")
     
@@ -210,10 +210,6 @@ async def show_fsub_panel(client: Client, message: Message, not_joined_channels:
         
         # Add instruction text
         instruction_text = (
-            f"\n\n<b>📋 INSTRUCTIONS:</b>\n"
-            f"1️⃣ Click the JOIN buttons above\n"
-            f"2️⃣ Join all required channels\n"
-            f"3️⃣ Click RELOAD button to verify\n\n"
             f"<b>📢 Channels to join: {len(not_joined_channels)}</b>"
         )
         
