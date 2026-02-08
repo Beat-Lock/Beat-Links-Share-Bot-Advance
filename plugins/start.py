@@ -206,7 +206,7 @@ async def show_fsub_panel(client: Client, message: Message, not_joined_channels:
         
         # Add instruction text
         instruction_text = (
-            f"ʏᴏᴜ ʜᴀᴠᴇɴᴛ ᴊᴏɪɴ 😅 {len(not_joined_channels)} ᴄʜᴀɴɴᴇʟ.ᴘʟᴇᴀsᴇ ᴊᴏɪɴ ɪɴ ᴍʏ ᴄʜᴀɴɴᴇʟ/ɢʀᴏᴜᴘ ᴘʀᴏᴠɪᴅᴇᴅ ʙᴇʟᴏᴡ, ᴛʜᴇɴ ᴛʀʏ ᴀɢᴀɪɴ.. ! </b>\n\n"
+            f"ʏᴏᴜ ʜᴀᴠᴇɴᴛ ᴊᴏɪɴ 😅{len(not_joined_channels)} ᴄʜᴀɴɴᴇʟ.ᴘʟᴇᴀsᴇ ᴊᴏɪɴ ɪɴ ᴍʏ ᴄʜᴀɴɴᴇʟ/ɢʀᴏᴜᴘ ᴘʀᴏᴠɪᴅᴇᴅ ʙᴇʟᴏᴡ, ᴛʜᴇɴ ᴛʀʏ ᴀɢᴀɪɴ.. ! </b>\n\n"
             f"<b>❗ғᴀᴄɪɴɢ ᴘʀᴏʙʟᴇᴍs. ᴜsᴇ /help</b>"
         )
         
@@ -512,139 +512,6 @@ async def close_callback(client: Bot, callback_query):
     except:
         pass
 
-# NEW CALLBACK HANDLER FOR TRY AGAIN BUTTON
-@Bot.on_callback_query(filters.regex(r"^fsub_retry_"))
-async def fsub_retry_callback(client: Bot, callback_query: CallbackQuery):
-    """Handle Try Again button click - delete old panel and check subscription again"""
-    user_id = callback_query.from_user.id
-    
-    print(f"♻️ Try Again clicked by user {user_id}")
-    
-    # Extract the original start parameter from callback data
-    callback_data_parts = callback_query.data.split("_", 2)
-    original_start_param = callback_data_parts[2] if len(callback_data_parts) > 2 and callback_data_parts[2] != "none" else None
-    
-    print(f"   Original start param: {original_start_param}")
-    
-    # Re-check subscription
-    try:
-        not_joined = await get_fsub_channels_not_joined(client, user_id)
-        
-        if not not_joined:
-            # User has joined all channels - delete FSub panel and process their original request
-            print(f"✅ User {user_id} joined all channels!")
-            await callback_query.message.delete()
-            
-            # If there was an original start parameter, process it
-            if original_start_param:
-                print(f"🔗 Processing original start parameter: {original_start_param}")
-                
-                try:
-                    base64_string = original_start_param
-                    is_request = base64_string.startswith("req_")
-                    
-                    if is_request:
-                        base64_string = base64_string[4:]
-                        channel_id = await get_channel_by_encoded_link2(base64_string)
-                    else:
-                        channel_id = await get_channel_by_encoded_link(base64_string)
-                    
-                    if not channel_id:
-                        print(f"❌ Invalid encoded link: {base64_string}")
-                        return await callback_query.message.reply_text(
-                            "<b><blockquote expandable>Invalid or expired invite link.</blockquote></b>",
-                            parse_mode=ParseMode.HTML
-                        )
-
-                    print(f"✅ Decoded channel_id: {channel_id}")
-
-                    # Check if this is a /genlink link
-                    original_link = await get_original_link(channel_id)
-                    if original_link:
-                        print(f"🔗 Providing original link: {original_link}")
-                        button = InlineKeyboardMarkup(
-                            [[InlineKeyboardButton("• Proceed to Link •", url=original_link)]]
-                        )
-                        return await callback_query.message.reply_text(
-                            "<b><blockquote expandable>ʜᴇʀᴇ ɪs ʏᴏᴜʀ ʟɪɴᴋ! ᴄʟɪᴄᴋ ʙᴇʟᴏᴡ ᴛᴏ ᴘʀᴏᴄᴇᴇᴅ</blockquote></b>",
-                            reply_markup=button,
-                            parse_mode=ParseMode.HTML
-                        )
-
-                    # Generate invite link
-                    async with channel_locks[channel_id]:
-                        old_link_info = await get_current_invite_link(channel_id)
-                        current_time = datetime.now()
-                        
-                        if old_link_info:
-                            link_created_time = await get_link_creation_time(channel_id)
-                            if link_created_time and (current_time - link_created_time).total_seconds() < 240:
-                                invite_link = old_link_info["invite_link"]
-                                is_request_link = old_link_info["is_request"]
-                                print(f"♻️ Reusing existing invite link")
-                            else:
-                                try:
-                                    await client.revoke_chat_invite_link(channel_id, old_link_info["invite_link"])
-                                except:
-                                    pass
-                                invite = await client.create_chat_invite_link(
-                                    chat_id=channel_id,
-                                    expire_date=current_time + timedelta(minutes=10),
-                                    creates_join_request=is_request
-                                )
-                                invite_link = invite.invite_link
-                                is_request_link = is_request
-                                await save_invite_link(channel_id, invite_link, is_request_link)
-                        else:
-                            invite = await client.create_chat_invite_link(
-                                chat_id=channel_id,
-                                expire_date=current_time + timedelta(minutes=10),
-                                creates_join_request=is_request
-                            )
-                            invite_link = invite.invite_link
-                            is_request_link = is_request
-                            await save_invite_link(channel_id, invite_link, is_request_link)
-
-                    button_text = "• ʀᴇǫᴜᴇsᴛ ᴛᴏ ᴊᴏɪɴ •" if is_request_link else "• ᴊᴏɪɴ ᴄʜᴀɴɴᴇʟ •"
-                    button = InlineKeyboardMarkup([[InlineKeyboardButton(button_text, url=invite_link)]])
-                    
-                    await callback_query.message.reply_text(
-                        "<b><blockquote expandable>ʜᴇʀᴇ ɪs ʏᴏᴜʀ ʟɪɴᴋ! ᴄʟɪᴄᴋ ʙᴇʟᴏᴡ ᴛᴏ ᴘʀᴏᴄᴇᴇᴅ</blockquote></b>",
-                        reply_markup=button,
-                        parse_mode=ParseMode.HTML
-                    )
-
-                    note_msg = await callback_query.message.reply_text(
-                        "<u><b>Note: If the link is expired, please click the post link again to get a new one.</b></u>",
-                        parse_mode=ParseMode.HTML
-                    )
-                    asyncio.create_task(delete_after_delay(note_msg, 300))
-                    asyncio.create_task(revoke_invite_after_5_minutes(client, channel_id, invite_link, is_request_link))
-
-                except Exception as e:
-                    print(f"❌ Error processing original request: {e}")
-                    await callback_query.message.reply_text(
-                        "<b>✅ You can now use the bot! Use /start to begin.</b>",
-                        parse_mode=ParseMode.HTML
-                    )
-            else:
-                # No original start param, just show success
-                await callback_query.message.reply_text(
-                    "<b>✅ You can now use the bot! Use /start to begin.</b>",
-                    parse_mode=ParseMode.HTML
-                )
-        else:
-            # User still hasn't joined all channels - update the panel
-            print(f"❌ User {user_id} still needs to join {len(not_joined)} channel(s)")
-            await show_fsub_panel(client, callback_query.message, not_joined, original_start_param, edit=True)
-            await callback_query.answer("⚠️ Please join all required channels first!", show_alert=True)
-            
-    except Exception as e:
-        print(f"❌ Error in fsub_retry_callback: {e}")
-        import traceback
-        traceback.print_exc()
-        await callback_query.answer("❌ An error occurred. Please try /start again.", show_alert=True)
-
 @Bot.on_callback_query(filters.regex("check_sub"))
 async def check_sub_callback(client: Bot, callback_query: CallbackQuery):
     user_id = callback_query.from_user.id
@@ -833,8 +700,142 @@ async def auto_delete(sent_msg, duration):
 async def cb_handler(client: Bot, query: CallbackQuery):
     data = query.data  
     
-    # Skip if it's handled by specific handlers
-    if data.startswith("fsub_retry_") or data == "check_sub":
+    # Handle Try Again button for FSub
+    if data.startswith("fsub_retry_"):
+        user_id = query.from_user.id
+        
+        print(f"♻️ Try Again clicked by user {user_id}")
+        
+        # Extract the original start parameter from callback data
+        callback_data_parts = data.split("_", 2)
+        original_start_param = callback_data_parts[2] if len(callback_data_parts) > 2 and callback_data_parts[2] != "none" else None
+        
+        print(f"   Original start param: {original_start_param}")
+        
+        # Re-check subscription
+        try:
+            not_joined = await get_fsub_channels_not_joined(client, user_id)
+            
+            if not not_joined:
+                # User has joined all channels - delete FSub panel and process their original request
+                print(f"✅ User {user_id} joined all channels!")
+                await query.message.delete()
+                
+                # If there was an original start parameter, process it
+                if original_start_param:
+                    print(f"🔗 Processing original start parameter: {original_start_param}")
+                    
+                    try:
+                        base64_string = original_start_param
+                        is_request = base64_string.startswith("req_")
+                        
+                        if is_request:
+                            base64_string = base64_string[4:]
+                            channel_id = await get_channel_by_encoded_link2(base64_string)
+                        else:
+                            channel_id = await get_channel_by_encoded_link(base64_string)
+                        
+                        if not channel_id:
+                            print(f"❌ Invalid encoded link: {base64_string}")
+                            return await client.send_message(
+                                user_id,
+                                "<b><blockquote expandable>Invalid or expired invite link.</blockquote></b>",
+                                parse_mode=ParseMode.HTML
+                            )
+
+                        print(f"✅ Decoded channel_id: {channel_id}")
+
+                        # Check if this is a /genlink link
+                        original_link = await get_original_link(channel_id)
+                        if original_link:
+                            print(f"🔗 Providing original link: {original_link}")
+                            button = InlineKeyboardMarkup(
+                                [[InlineKeyboardButton("• Proceed to Link •", url=original_link)]]
+                            )
+                            return await client.send_message(
+                                user_id,
+                                "<b><blockquote expandable>ʜᴇʀᴇ ɪs ʏᴏᴜʀ ʟɪɴᴋ! ᴄʟɪᴄᴋ ʙᴇʟᴏᴡ ᴛᴏ ᴘʀᴏᴄᴇᴇᴅ</blockquote></b>",
+                                reply_markup=button,
+                                parse_mode=ParseMode.HTML
+                            )
+
+                        # Generate invite link
+                        async with channel_locks[channel_id]:
+                            old_link_info = await get_current_invite_link(channel_id)
+                            current_time = datetime.now()
+                            
+                            if old_link_info:
+                                link_created_time = await get_link_creation_time(channel_id)
+                                if link_created_time and (current_time - link_created_time).total_seconds() < 240:
+                                    invite_link = old_link_info["invite_link"]
+                                    is_request_link = old_link_info["is_request"]
+                                    print(f"♻️ Reusing existing invite link")
+                                else:
+                                    try:
+                                        await client.revoke_chat_invite_link(channel_id, old_link_info["invite_link"])
+                                    except:
+                                        pass
+                                    invite = await client.create_chat_invite_link(
+                                        chat_id=channel_id,
+                                        expire_date=current_time + timedelta(minutes=10),
+                                        creates_join_request=is_request
+                                    )
+                                    invite_link = invite.invite_link
+                                    is_request_link = is_request
+                                    await save_invite_link(channel_id, invite_link, is_request_link)
+                            else:
+                                invite = await client.create_chat_invite_link(
+                                    chat_id=channel_id,
+                                    expire_date=current_time + timedelta(minutes=10),
+                                    creates_join_request=is_request
+                                )
+                                invite_link = invite.invite_link
+                                is_request_link = is_request
+                                await save_invite_link(channel_id, invite_link, is_request_link)
+
+                        button_text = "• ʀᴇǫᴜᴇsᴛ ᴛᴏ ᴊᴏɪɴ •" if is_request_link else "• ᴊᴏɪɴ ᴄʜᴀɴɴᴇʟ •"
+                        button = InlineKeyboardMarkup([[InlineKeyboardButton(button_text, url=invite_link)]])
+                        
+                        await client.send_message(
+                            user_id,
+                            "<b><blockquote expandable>ʜᴇʀᴇ ɪs ʏᴏᴜʀ ʟɪɴᴋ! ᴄʟɪᴄᴋ ʙᴇʟᴏᴡ ᴛᴏ ᴘʀᴏᴄᴇᴇᴅ</blockquote></b>",
+                            reply_markup=button,
+                            parse_mode=ParseMode.HTML
+                        )
+
+                        note_msg = await client.send_message(
+                            user_id,
+                            "<u><b>Note: If the link is expired, please click the post link again to get a new one.</b></u>",
+                            parse_mode=ParseMode.HTML
+                        )
+                        asyncio.create_task(delete_after_delay(note_msg, 300))
+                        asyncio.create_task(revoke_invite_after_5_minutes(client, channel_id, invite_link, is_request_link))
+
+                    except Exception as e:
+                        print(f"❌ Error processing original request: {e}")
+                        await client.send_message(
+                            user_id,
+                            "<b>✅ You can now use the bot! Use /start to begin.</b>",
+                            parse_mode=ParseMode.HTML
+                        )
+                else:
+                    # No original start param, just show success
+                    await client.send_message(
+                        user_id,
+                        "<b>✅ You can now use the bot! Use /start to begin.</b>",
+                        parse_mode=ParseMode.HTML
+                    )
+            else:
+                # User still hasn't joined all channels - update the panel
+                print(f"❌ User {user_id} still needs to join {len(not_joined)} channel(s)")
+                await show_fsub_panel(client, query.message, not_joined, original_start_param, edit=True)
+                await query.answer("⚠️ Please join all required channels first!", show_alert=True)
+                
+        except Exception as e:
+            print(f"❌ Error in fsub_retry_callback: {e}")
+            import traceback
+            traceback.print_exc()
+            await query.answer("❌ An error occurred. Please try /start again.", show_alert=True)
         return
     
     if data == "close":
