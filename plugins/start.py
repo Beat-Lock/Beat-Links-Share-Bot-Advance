@@ -92,7 +92,7 @@ async def get_fsub_channels_not_joined(client: Client, user_id: int) -> list:
     
     return not_joined
 
-async def show_fsub_panel(client: Client, message: Message, not_joined_channels: list):
+async def show_fsub_panel(client: Client, message: Message, not_joined_channels: list, original_param: str = None):
     """Display the Force Subscribe panel with join buttons"""
     buttons = []
     
@@ -179,21 +179,23 @@ async def show_fsub_panel(client: Client, message: Message, not_joined_channels:
         )
         return
     
-    # Add "Try Again" button - Make it prominent
+    # Add "Try Again" button - FIXED to preserve original parameter
     try:
-        # Try to get the start parameter if available
-        start_param = message.text.split()[1] if len(message.text.split()) > 1 else ""
-        if start_param:
-            retry_url = f"https://t.me/{client.username}?start={start_param}"
+        if original_param:
+            # Use the original parameter that was passed to /start
+            retry_url = f"https://t.me/{client.username}?start={original_param}"
+            print(f"✅ Reload button will use original parameter: {original_param}")
         else:
-            retry_url = f"https://t.me/{client.username}?start=refresh"
+            # No parameter, just use /start
+            retry_url = f"https://t.me/{client.username}"
+            print(f"✅ Reload button will use plain /start")
         
         # Add reload button after all channel buttons
         buttons.append([InlineKeyboardButton(text='♻️ Try Again', url=retry_url)])
         print(f"✅ Reload button added")
     except Exception as e:
         print(f"⚠️ Error adding reload button: {e}")
-        buttons.append([InlineKeyboardButton(text='♻️ Try Again ', url=f"https://t.me/{client.username}")])
+        buttons.append([InlineKeyboardButton(text='♻️ Try Again', url=f"https://t.me/{client.username}")])
     
     print(f"✅ Total buttons created: {len(buttons)}")
     
@@ -291,6 +293,13 @@ async def start_command(client: Bot, message: Message):
     except Exception as e:
         print(f"⚠️ Error adding user to database: {e}")
 
+    # Extract the start parameter BEFORE checking FSub
+    text = message.text
+    original_param = None
+    if len(text) > 7:
+        original_param = text.split(" ", 1)[1]
+        print(f"📝 Start parameter detected: {original_param}")
+
     # ✅ STEP 3: CHECK FORCE SUBSCRIPTION
     try:
         not_joined_channels = await get_fsub_channels_not_joined(client, user_id)
@@ -298,7 +307,8 @@ async def start_command(client: Bot, message: Message):
         if not_joined_channels:
             print(f"❌ User {user_id} needs to join {len(not_joined_channels)} channel(s)")
             print(f"   Channels: {[ch['title'] for ch in not_joined_channels]}")
-            await show_fsub_panel(client, message, not_joined_channels)
+            # PASS the original parameter to the FSub panel
+            await show_fsub_panel(client, message, not_joined_channels, original_param)
             return
         else:
             print(f"✅ User {user_id} joined all FSub channels (or none configured)")
@@ -308,7 +318,6 @@ async def start_command(client: Bot, message: Message):
         traceback.print_exc()
 
     # ✅ STEP 4: PROCESS START PARAMETER (if any)
-    text = message.text
     if len(text) > 7:
         print(f"🔗 Processing start parameter...")
         try:
