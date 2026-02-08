@@ -227,10 +227,6 @@ async def show_fsub_panel(client: Client, message: Message, not_joined_channels:
                 "⚠️ Error displaying force subscribe panel. Please contact admin.",
                 parse_mode=ParseMode.HTML
             )
-            "\n".join([f"• {ch['title']}" for ch in not_joined_channels]),
-            reply_markup=InlineKeyboardMarkup(buttons),
-            parse_mode=ParseMode.HTML
-        )
 
 async def delete_after_delay(msg, delay):
     """Auto-delete message after delay"""
