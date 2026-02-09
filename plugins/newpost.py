@@ -30,13 +30,33 @@ async def revoke_invite_after_5_minutes(client: Bot, channel_id: int, link: str,
     except Exception as e:
         print(f"Fᴀɪʟᴇᴅ ᴛᴏ ʀᴇᴠᴏᴋᴇ ɪɴᴠɪᴛᴇ ғᴏʀ ᴄʜᴀɴɴᴇʟ {channel_id}: {e}")
 
-# Add chat command
+# Add chat command - MODIFIED TO SUPPORT FORWARDED MESSAGES
 @Bot.on_message((filters.command('addchat') | filters.command('addch')) & is_owner_or_admin)
 async def set_channel(client: Bot, message: Message):
-    try:
-        channel_id = int(message.command[1])
-    except (IndexError, ValueError):
-        return await message.reply("<b><blockquote expandable>Iɴᴠᴀʟɪᴅ ᴄʜᴀᴛ ID. Exᴀᴍᴘʟᴇ: <code>/addchat &lt;chat_id&gt;</code></b>")
+    channel_id = None
+    
+    # Check if replying to a forwarded message from a channel
+    if message.reply_to_message and message.reply_to_message.forward_from_chat:
+        channel_id = message.reply_to_message.forward_from_chat.id
+        print(f"📥 Channel ID extracted from forwarded message: {channel_id}")
+    # Otherwise check for command argument
+    elif len(message.command) > 1:
+        try:
+            channel_id = int(message.command[1])
+        except ValueError:
+            return await message.reply(
+                "<b><blockquote expandable>❌ Invalid channel ID.\n\n"
+                "📌 Usage:\n"
+                "• <code>/addch &lt;channel_id&gt;</code>\n"
+                "• Reply to a forwarded message with <code>/addch</code></blockquote></b>"
+            )
+    else:
+        return await message.reply(
+            "<b><blockquote expandable>❌ Please provide a channel ID or reply to a forwarded message.\n\n"
+            "📌 Usage:\n"
+            "• <code>/addch &lt;channel_id&gt;</code>\n"
+            "• Reply to a forwarded message with <code>/addch</code></blockquote></b>"
+        )
     
     try:
         chat = await client.get_chat(channel_id)
@@ -84,16 +104,44 @@ async def set_channel(client: Bot, message: Message):
     except Exception as e:
         return await message.reply(f"Unexpected Error: {str(e)}")
 
-# Delete chat command
+# Delete chat command - MODIFIED TO SUPPORT FORWARDED MESSAGES
 @Bot.on_message((filters.command('delchat') | filters.command('delch')) & is_owner_or_admin)
 async def del_channel(client: Bot, message: Message):
+    channel_id = None
+    
+    # Check if replying to a forwarded message from a channel
+    if message.reply_to_message and message.reply_to_message.forward_from_chat:
+        channel_id = message.reply_to_message.forward_from_chat.id
+        print(f"📥 Channel ID extracted from forwarded message for deletion: {channel_id}")
+    # Otherwise check for command argument
+    elif len(message.command) > 1:
+        try:
+            channel_id = int(message.command[1])
+        except ValueError:
+            return await message.reply(
+                "<b><blockquote expandable>❌ Invalid channel ID.\n\n"
+                "📌 Usage:\n"
+                "• <code>/delch &lt;channel_id&gt;</code>\n"
+                "• Reply to a forwarded message with <code>/delch</code></blockquote></b>"
+            )
+    else:
+        return await message.reply(
+            "<b><blockquote expandable>❌ Please provide a channel ID or reply to a forwarded message.\n\n"
+            "📌 Usage:\n"
+            "• <code>/delch &lt;channel_id&gt;</code>\n"
+            "• Reply to a forwarded message with <code>/delch</code></blockquote></b>"
+        )
+    
     try:
-        channel_id = int(message.command[1])
-    except (IndexError, ValueError):
-        return await message.reply("<b><blockquote expandable>Iɴᴠᴀʟɪᴅ ᴄʜᴀᴛ ID. Exᴀᴍᴘʟᴇ: <code>/delch &lt;chat_id&gt;</code></b>")
+        chat = await client.get_chat(channel_id)
+        channel_name = chat.title
+    except:
+        channel_name = f"Channel {channel_id}"
     
     await delete_channel(channel_id)
-    return await message.reply(f"<b><blockquote expandable>❌ Cʜᴀᴛ {channel_id} ʜᴀs ʙᴇᴇɴ ʀᴇᴍᴏᴠᴇᴅ sᴜᴄᴄᴇssғᴜʟʟʏ.</b>")
+    return await message.reply(
+        f"<b><blockquote expandable>❌ Cʜᴀᴛ {channel_name} ({channel_id}) ʜᴀs ʙᴇᴇɴ ʀᴇᴍᴏᴠᴇᴅ sᴜᴄᴄᴇssғᴜʟʟʏ.</b>"
+    )
 
 # Channel post command
 @Bot.on_message(filters.command('ch_links') & is_owner_or_admin)
@@ -503,4 +551,3 @@ async def get_chat_info(client, channel_id):
         if channel_id in chat_info_cache:
             return chat_info_cache[channel_id][0]
         raise e
-
